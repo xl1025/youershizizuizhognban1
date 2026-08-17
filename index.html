@@ -1,0 +1,2707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>自然元素探索之旅 - 3D幼儿互动识字</title>
+    <style>
+        /* ==================== 全局重置与基础 ==================== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'KaiTi', 'SimSun', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; min-height: 100dvh; overflow: hidden;
+            color: #333;
+            /* 避让刘海屏/Home 指示条：内缩安全区，主体始终完整可见（桌面环境 insets 为 0，无副作用） */
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
+
+        /* ==================== Three.js 3D背景画布 ==================== */
+        #three-canvas {
+            position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh; height: 100dvh;
+            z-index: 0; pointer-events: none;
+        }
+
+        /* ==================== 主应用容器（寻宝地图） ==================== */
+        .app-container {
+            position: relative; z-index: 1;
+            /* 自适应：同时受宽度与高度约束，避免竖屏被压扁、横屏（尤其手机横屏）被裁切 */
+            width: min(92vw, 1300px, calc((100dvh - 24px) * 16 / 9));
+            aspect-ratio: 16 / 9; max-height: 94dvh;
+            border-radius: 24px;
+            box-shadow:
+                0 25px 80px rgba(0,0,0,0.6),
+                0 0 60px rgba(255,200,100,0.15),
+                inset 0 0 30px rgba(255,255,255,0.05);
+            overflow: hidden;
+            transform-style: preserve-3d;
+            perspective: 1200px;
+            /* 微妙悬浮动画 */
+            animation: containerFloat 6s ease-in-out infinite;
+        }
+
+        @keyframes containerFloat {
+            0%, 100% { transform: translateY(0) rotateX(0deg); }
+            50% { transform: translateY(-8px) rotateX(1deg); }
+        }
+
+        .main-bg {
+            width: 100%; height: 100%;
+            object-fit: cover; border-radius: 24px;
+            display: block;
+        }
+
+        /* ==================== 场景切换标签栏 ==================== */
+        .scene-tabs {
+            position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+            z-index: 15;
+            display: flex; gap: 6px;
+            padding: 4px;
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .scene-tab {
+            padding: 8px 22px;
+            border: none; border-radius: 16px;
+            cursor: pointer;
+            font-size: 0.92em; font-weight: bold;
+            font-family: 'Microsoft YaHei', sans-serif;
+            color: rgba(255,255,255,0.7);
+            background: transparent;
+            transition: all 0.35s ease;
+            white-space: nowrap;
+            letter-spacing: 1px;
+            touch-action: manipulation;
+        }
+        .scene-tab:hover { color: rgba(255,255,255,0.95); background: rgba(255,215,0,0.15); }
+        .scene-tab.active {
+            color: #1a1a2e;
+            background: linear-gradient(135deg, #ffd54f 0%, #ffb300 100%);
+            box-shadow: 0 2px 12px rgba(255,179,0,0.5), 0 0 20px rgba(255,215,0,0.2);
+            transform: scale(1.05);
+        }
+        /* 动物园场景使用6列网格（18格）；自然元素保持5列（15格） */
+        .grid-overlay.cols-6 { grid-template-columns: repeat(6, 1fr); }
+
+        /* ==================== 5×3 交互网格覆盖层 ==================== */
+        .grid-overlay {
+            position: absolute;
+            top: 16%; left: 9%; right: 9%; bottom: 9%;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 1.8%;
+            z-index: 2;
+        }
+
+        /* 每个网格单元 - 3D交互卡片 */
+        .grid-item {
+            cursor: pointer;
+            border-radius: 16px;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: rgba(255, 255, 255, 0);
+            position: relative;
+            transform-style: preserve-3d;
+            /* 入场动画 */
+            opacity: 0;
+            animation: gridItemIn 0.6s ease forwards;
+        }
+
+        .grid-item:nth-child(1)  { animation-delay: 0.05s; }
+        .grid-item:nth-child(2)  { animation-delay: 0.10s; }
+        .grid-item:nth-child(3)  { animation-delay: 0.15s; }
+        .grid-item:nth-child(4)  { animation-delay: 0.20s; }
+        .grid-item:nth-child(5)  { animation-delay: 0.25s; }
+        .grid-item:nth-child(6)  { animation-delay: 0.30s; }
+        .grid-item:nth-child(7)  { animation-delay: 0.35s; }
+        .grid-item:nth-child(8)  { animation-delay: 0.40s; }
+        .grid-item:nth-child(9)  { animation-delay: 0.45s; }
+        .grid-item:nth-child(10) { animation-delay: 0.50s; }
+        .grid-item:nth-child(11) { animation-delay: 0.55s; }
+        .grid-item:nth-child(12) { animation-delay: 0.60s; }
+        .grid-item:nth-child(13) { animation-delay: 0.65s; }
+        .grid-item:nth-child(14) { animation-delay: 0.70s; }
+        .grid-item:nth-child(15) { animation-delay: 0.75s; }
+
+        @keyframes gridItemIn {
+            from { opacity: 0; transform: scale(0.5) translateY(30px); }
+            to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        /* Hover - 3D倾斜 + 光晕 */
+        .grid-item:hover {
+            background: rgba(255, 230, 150, 0.25);
+            box-shadow:
+                0 0 25px rgba(255, 215, 0, 0.7),
+                0 0 50px rgba(255, 180, 0, 0.3),
+                inset 0 0 20px rgba(255,255,255,0.2);
+            transform: scale(1.08) translateZ(20px);
+            z-index: 10;
+        }
+
+        /* 脉冲提示动画 - 引导幼儿点击 */
+        .grid-item::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 20px; height: 20px;
+            margin-left: -10px; margin-top: -10px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,215,0,0.8) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .grid-item:hover::after {
+            opacity: 1;
+            animation: pulseRing 1.5s ease-out infinite;
+        }
+
+        @keyframes pulseRing {
+            0%   { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(4); opacity: 0; }
+        }
+
+        /* 点击反馈波纹 */
+        .grid-item .ripple {
+            position: absolute; border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.6) 0%, transparent 70%);
+            transform: scale(0); animation: rippleEffect 0.6s ease-out forwards;
+            pointer-events: none;
+        }
+
+        @keyframes rippleEffect {
+            to { transform: scale(4); opacity: 0; }
+        }
+
+        /* ==================== 知识卡片弹窗（3D翻转） ==================== */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh; height: 100dvh;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(12px);
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.45s ease;
+            z-index: 100;
+            perspective: 1500px;
+            /* 避让刘海/Home 指示条：内缩安全区，弹窗始终完整可见 */
+            box-sizing: border-box;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
+        .modal-overlay.active {
+            opacity: 1; pointer-events: auto;
+        }
+
+        /* 弹窗内容 - 3D翻转进入 */
+        .modal-content {
+            width: 86vw; max-width: 1050px;
+            height: 78vh; height: 78dvh; max-height: 700px;
+            background: linear-gradient(145deg, #fffef5 0%, #fff8e7 50%, #fff3d6 100%);
+            border-radius: 32px;
+            display: flex; overflow: hidden;
+            transform: rotateY(-90deg) scale(0.5);
+            opacity: 0;
+            transition: all 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow:
+                0 30px 90px rgba(0,0,0,0.5),
+                0 0 0 4px rgba(255,200,100,0.3),
+                0 0 80px rgba(255,180,80,0.15);
+            position: relative;
+        }
+        .modal-overlay.active .modal-content {
+            transform: rotateY(0deg) scale(1);
+            opacity: 1;
+        }
+
+        /* 左侧：动态放大截取大图（单幅场景图） */
+        .modal-left {
+            width: 48%; height: 100%;
+            background-image: linear-gradient(135deg, #ffe6bf 0%, #ffcf8a 100%);
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            border-right: 4px dashed #d4c2a5;
+            position: relative;
+            overflow: hidden;
+            /* 大字置于左上角、缩小字号；底部留出空间给「读一读」毛玻璃面板，二者互不遮挡 */
+            display: flex; align-items: flex-start; justify-content: flex-start;
+            padding: 5% 0 0 6%;
+        }
+        /* 左侧媒体：视频以全屏填充展示（图片仍用 background-image 等比覆盖） */
+        .modal-left video.modal-media {
+            position: absolute; inset: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 0;
+            pointer-events: auto;   /* 允许点击视频暂停/播放；左侧大字在更上层(z-index:2)不受影响 */
+        }
+        /* 左侧图片上的装饰光效 */
+        .modal-left::before {
+            content: '';
+            position: absolute; top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: conic-gradient(from 0deg, transparent, rgba(255,215,0,0.08), transparent, rgba(100,200,255,0.06), transparent);
+            animation: shimmerRotate 8s linear infinite;
+        }
+        @keyframes shimmerRotate {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 左侧大字展示 */
+        .left-char-display {
+            font-size: 7em;
+            font-weight: bold;
+            color: rgba(255,255,255,0.95);
+            text-shadow:
+                0 4px 15px rgba(0,0,0,0.3),
+                0 0 40px rgba(255,200,100,0.4),
+                0 0 80px rgba(255,150,50,0.2);
+            position: relative;
+            z-index: 2;
+            animation: charBreathe 3s ease-in-out infinite;
+        }
+        @keyframes charBreathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* 右侧：教学与互动区（翻转卡片容器） */
+        .modal-right {
+            width: 52%; height: 100%;
+            position: relative;
+            perspective: 1500px;
+            background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,248,220,0.5) 100%);
+        }
+
+        /* ===== 3D 翻转卡片 ===== */
+        .flip-card-inner {
+            position: absolute; inset: 0;
+            transition: transform 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+        }
+        .flip-card-inner.flipped { transform: rotateY(180deg); }
+        .flip-face {
+            position: absolute; inset: 0;
+            -webkit-backface-visibility: hidden; backface-visibility: hidden;
+            overflow-y: auto;
+            padding: 70px 30px 64px;
+            display: flex; flex-direction: column; align-items: center;
+            /* 美化滚动条 */
+            scrollbar-width: thin;
+        }
+        .flip-face::-webkit-scrollbar { width: 8px; }
+        .flip-face::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); border-radius: 4px; }
+        .flip-face::-webkit-scrollbar-thumb { background: rgba(255,180,80,0.5); border-radius: 4px; }
+        .flip-front { background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,248,220,0.5) 100%); }
+        .flip-back  { transform: rotateY(180deg); background: linear-gradient(180deg, rgba(255,248,220,0.5) 0%, rgba(255,255,255,0) 100%); }
+        .flip-back .toolbar { margin-bottom: 12px; }
+        .back-title { font-size: 1.4em; color: #ff6b6b; margin: 4px 0 14px; font-weight: bold; }
+        .trace-tip { font-size: 0.95em; color: #777; margin-top: 12px; text-align: center; line-height: 1.5; padding: 0 6px; }
+
+        /* 翻转按钮（始终可见，固定在卡片左上角） */
+        .flip-btn {
+            position: absolute; top: 16px; left: 16px; z-index: 20;
+            font-size: 0.95em; padding: 9px 16px;
+            border: none; border-radius: 24px; cursor: pointer;
+            color: #fff; font-weight: bold; white-space: nowrap;
+            background: linear-gradient(135deg, #ffb74d 0%, #f57c00 100%);
+            box-shadow: 0 4px 14px rgba(245,124,0,0.4);
+            transition: all 0.3s;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        .flip-btn:hover { transform: translateY(-2px) scale(1.05); }
+        .flip-btn:active { transform: translateY(0) scale(0.96); }
+
+        .close-btn {
+            position: absolute; top: 18px; right: 22px;
+            font-size: 2em; cursor: pointer; color: #aaa;
+            width: 44px; height: 44px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+        .close-btn:hover {
+            color: #ff6b6b;
+            background: rgba(255,107,107,0.15);
+            transform: rotate(90deg) scale(1.1);
+        }
+
+        /* 字头信息区 */
+        .char-header {
+            text-align: center; margin-bottom: 16px;
+            padding: 4px 0 14px;
+            border-bottom: 2px dashed #eeddaa;
+            width: 100%;
+        }
+        .pinyin {
+            display: inline-block;
+            font-size: 2.6em; color: #ff6b6b;
+            font-family: sans-serif; letter-spacing: 5px;
+            font-weight: 600; line-height: 1.1;
+            text-shadow: 0 2px 8px rgba(255,107,107,0.22);
+        }
+        .english {
+            display: inline-block;
+            font-size: 1.15em; color: #4da8da;
+            margin-top: 7px; font-weight: bold;
+            letter-spacing: 4px;
+            padding: 3px 18px;
+            background: rgba(77,168,218,0.10);
+            border-radius: 20px;
+        }
+        /* 顶部文字/拼音/单词拆分为独立字母对象，便于逐字母高亮（替代原弹窗） */
+        .top-block .pinyin, .top-block .english { white-space: nowrap; }
+        .pinyin .py-part { display: inline-flex; align-items: baseline; }
+        .letter {
+            display: inline-block;
+            transition: transform .18s ease, color .18s ease, background-color .18s ease, text-shadow .18s ease, box-shadow .18s ease;
+            border-radius: 6px; padding: 0 2px;
+        }
+        .letter.hl {
+            color: #fff; background: #ff8a3d;
+            transform: scale(1.32); text-shadow: 0 2px 8px rgba(255,138,61,0.5);
+            box-shadow: 0 0 0 3px rgba(255,138,61,0.25);
+        }
+        .english .letter.hl { background: #2e9be6; box-shadow: 0 0 0 3px rgba(46,155,230,0.25); }
+
+        /* 田字格测验区（双层：底层黑色笔顺动画 + 上层蓝色手写描红，蓝迹持久不被清除） */
+        #tzg-container {
+            position: relative;
+            width: 190px; height: 190px;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="190" height="190"><rect x="2" y="2" width="186" height="186" fill="%23fffef8" stroke="%23e85a5a" stroke-width="3" rx="4"/><line x1="95" y1="2" x2="95" y2="188" stroke="%23e85a5a" stroke-width="1.5" stroke-dasharray="6,4"/><line x1="2" y1="95" x2="188" y2="95" stroke="%23e85a5a" stroke-width="1.5" stroke-dasharray="6,4"/></svg>');
+            margin-bottom: 18px; cursor: crosshair;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            transition: transform 0.3s, box-shadow 0.3s;
+            animation: tzgPulse 2.6s ease-in-out infinite;
+        }
+        #tzg-container > div {
+            position: absolute; inset: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;           /* 防止笔划/文字溢出田字格外 */
+            box-sizing: border-box;
+        }
+        /* 确保 HanziWriter 渲染的 SVG/Canvas 精确填满子容器，与格线对齐 */
+        #tzg-base > svg,
+        #tzg-base > canvas,
+        #tzg-trace > svg,
+        #tzg-trace > canvas {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+        }
+        #tzg-base  { z-index: 1; }   /* 黑色笔顺动画 / 字形参考层 */
+        #tzg-trace { z-index: 2; }   /* 蓝色手写描红层（覆盖在上，捕获书写事件） */
+        @keyframes tzgPulse {
+            0%, 100% { box-shadow: 0 4px 15px rgba(0,0,0,0.08), 0 0 0 0 rgba(255,159,67,0); }
+            50% { box-shadow: 0 6px 18px rgba(0,0,0,0.10), 0 0 0 10px rgba(255,159,67,0.14); }
+        }
+        /* 仅在有悬停能力的设备（桌面）放大，避免触屏点按后“粘滞”放大、干扰描红书写 */
+        @media (hover: hover) {
+            #tzg-container:hover {
+                transform: scale(1.04);
+                animation: none;
+                box-shadow: 0 8px 26px rgba(232,90,90,0.25), 0 0 0 10px rgba(255,159,67,0.18);
+            }
+        }
+        /* 弹窗隐藏时暂停田字格脉冲动画，避免常驻重绘（性能优化） */
+        .modal-overlay:not(.active) #tzg-container { animation-play-state: paused; }
+
+        /* 释义区域 */
+        .meaning-box {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            padding: 12px 20px; border-radius: 16px;
+            margin-bottom: 16px; width: 100%;
+            text-align: center;
+            border: 2px solid #a5d6a7;
+            box-shadow: 0 3px 10px rgba(76,175,80,0.15);
+        }
+        .meaning-label {
+            font-size: 0.9em; color: #388e3c; font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .meaning-text {
+            font-size: 1.25em; color: #2e7d32; line-height: 1.5;
+        }
+
+        /* 组词区域 */
+        .words {
+            font-size: 1.7em; color: #444; margin-bottom: 18px;
+            text-align: center; width: 100%;
+            padding: 10px;
+            background: rgba(255,255,255,0.6);
+            border-radius: 14px;
+        }
+
+        /* ==================== 顶部操作按钮栏 ==================== */
+        .toolbar {
+            display: flex; gap: 10px; flex-wrap: wrap;
+            justify-content: center; align-items: center;
+            width: 100%; margin-bottom: 18px;
+            padding: 10px;
+            background: rgba(255,255,255,0.45);
+            border-radius: 18px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+        }
+        .tb-btn {
+            font-size: 0.98em; padding: 10px 18px;
+            border: none; border-radius: 30px; cursor: pointer;
+            color: white; font-weight: bold;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-family: 'Microsoft YaHei', sans-serif;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+            white-space: nowrap;
+        }
+        .tb-btn:hover { transform: translateY(-3px) scale(1.05); }
+        .tb-btn:active { transform: translateY(0) scale(0.97); }
+
+        .tb-blend   { background: linear-gradient(135deg, #ff8a65 0%, #f4511e 100%); }
+        .tb-phonics { background: linear-gradient(135deg, #4db6ac 0%, #00897b 100%); }
+        .tb-audio   { background: linear-gradient(135deg, #ff9f43 0%, #f3801c 100%); }
+        .tb-animate { background: linear-gradient(135deg, #4da8da 0%, #3d8bc0 100%); }
+        .tb-trace   { background: linear-gradient(135deg, #7986cb 0%, #3f51b5 100%); }
+        .tb-quiz    { background: linear-gradient(135deg, #ab47bc 0%, #8e24aa 100%); }
+        .tb-replay  { background: linear-gradient(135deg, #26c6da 0%, #00acc1 100%); }
+
+        /* 顶部小喇叭按钮（拼音 / 英语 拼读入口，置于拼音 / 单词之后） */
+        .spk-btn {
+            width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
+            background: linear-gradient(135deg, #ffd54f 0%, #ff9f43 100%);
+            color: #fff; font-size: 0.95em; line-height: 1;
+            display: inline-flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 8px rgba(255,159,67,0.5);
+            transition: transform 0.2s; flex-shrink: 0;
+        }
+        .spk-btn:hover { transform: scale(1.12); }
+        .spk-btn:active { transform: scale(0.94); }
+
+        /* 顶部模块：文字 / 拼音 / 单词 整体水平居中显示（仍可被拖动） */
+        .top-block { align-self: stretch; width: 100%; text-align: center; cursor: grab; user-select: none; }
+        .top-block:active { cursor: grabbing; }
+        .top-block .char-header { text-align: center; }
+        .py-row, .en-row { display: flex; align-items: center; gap: 10px; justify-content: center; }
+        .en-row { margin-top: 6px; }
+        .top-block .pinyin { text-align: center; }
+
+        /* 部首与字形三合一模块（笔画 / 结构 融入部首，并加宽） */
+        .info-module {
+            align-self: stretch; width: 100%; box-sizing: border-box;
+            background: #fffaf0; border: 2px solid #e7d3a8; border-radius: 16px;
+            padding: 14px 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.06); margin-bottom: 14px;
+        }
+        .info-module .module-label {
+            font-size: 1.05em; font-weight: bold; color: #c0392b;
+            margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px dashed #e7d3a8;
+        }
+        .info-grid { display: flex; gap: 16px; }
+        .info-cell {
+            flex: 1; text-align: center; background: #fff;
+            border: 2px solid #f0e2c0; border-radius: 12px; padding: 10px 6px;
+        }
+        .info-cell .ic-label { font-size: 0.85em; color: #999; margin-bottom: 4px; }
+        .info-cell .ic-val { font-size: 1.45em; color: #2c3e50; font-weight: bold; line-height: 1.2; }
+        .info-cell.is-radical .ic-val { font-size: 2.2em; color: #e53935; }
+
+        .tb-trace-guide { background: linear-gradient(135deg, #9575cd 0%, #5e35b1 100%); }
+
+        /* 按要求隐藏「笔顺动画」按钮（其余书写功能保持不变） */
+        #btn-animate { display: none !important; }
+        /* 背面作为定位上下文，供描写引导弹窗绝对定位居中覆盖 */
+        .flip-back { position: relative; }
+
+        /* ==================== 拼读高亮展示区（点击拼读时显示） ==================== */
+        .blend-bar {
+            position: absolute; top: 72px; right: 14px; width: min(248px, 54%);
+            margin: 0; padding: 12px 14px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(255,138,101,0.10), rgba(77,182,172,0.12));
+            border: 2px dashed rgba(244,81,30,0.45);
+            display: none; z-index: 22;
+        }
+        .blend-bar.show { display: block; animation: blendPop 0.35s cubic-bezier(0.175,0.885,0.32,1.275); }
+        @keyframes blendPop { from { opacity:0; transform: scale(0.92);} to {opacity:1; transform: scale(1);} }
+        .blend-title { font-size: 0.95em; color: #f4511e; margin-bottom: 8px; font-weight: bold; text-align:center; }
+        .blend-chips { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: stretch; }
+        .blend-chip {
+            position: relative;
+            min-width: 58px; padding: 8px 14px; border-radius: 14px;
+            background: #ffffff; color: #555;
+            text-align: center;
+            border: 2px solid #e3e3e3;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            transition: all 0.28s cubic-bezier(0.175,0.885,0.32,1.275);
+        }
+        .blend-chip .bc-label { display: block; font-size: 0.62em; color: #9aa; font-weight: normal; margin-bottom: 2px; }
+        .blend-chip .bc-val { font-size: 1.5em; font-weight: bold; line-height: 1.1; }
+        .blend-chip.active {
+            background: linear-gradient(135deg, #ffd54f 0%, #ff9f43 100%);
+            color: #fff; border-color: #ff9f43;
+            transform: scale(1.14);
+            box-shadow: 0 0 18px rgba(255,159,67,0.85);
+        }
+        .blend-chip.active .bc-label { color: rgba(255,255,255,0.9); }
+        .blend-chip.active::after {
+            content: ''; position: absolute; inset: -5px;
+            border-radius: 16px; border: 2px solid rgba(255,159,67,0.6);
+            animation: blendPulse 1s ease-out infinite;
+        }
+        @keyframes blendPulse { 0%{transform:scale(1);opacity:0.8;} 100%{transform:scale(1.28);opacity:0;} }
+
+        /* ==================== 字形结构解析 ==================== */
+        .structure-box {
+            display: flex; justify-content: space-around; align-items: stretch;
+            width: 100%; margin-bottom: 14px;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: 2px solid #90caf9; border-radius: 16px;
+            padding: 10px 6px; box-shadow: 0 3px 10px rgba(33,150,243,0.15);
+        }
+        .structure-item { text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .structure-item + .structure-item { border-left: 2px dashed #90caf9; }
+        .structure-label { font-size: 0.82em; color: #1565c0; font-weight: bold; margin-bottom: 3px; }
+        .structure-value { font-size: 1.35em; color: #0d47a1; font-weight: bold; }
+
+        /* ==================== 造句示例 ==================== */
+        .sentence-box {
+            width: 100%; margin-bottom: 14px;
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            border: 2px solid #ffb74d; border-radius: 16px;
+            padding: 12px 18px; box-shadow: 0 3px 10px rgba(255,152,0,0.15);
+        }
+        .sentence-label { font-size: 0.9em; color: #e65100; font-weight: bold; margin-bottom: 4px; }
+        .sentence-text { font-size: 1.15em; color: #bf360c; line-height: 1.5; }
+
+        /* ==================== 笔画名称展示 ==================== */
+        .strokes-box {
+            width: 100%; margin-bottom: 14px;
+            background: linear-gradient(135deg, #ede7f6 0%, #d1c4e9 100%);
+            border: 2px solid #b39ddb; border-radius: 16px;
+            padding: 12px 16px; box-shadow: 0 3px 10px rgba(103,58,183,0.15);
+        }
+        .strokes-label { font-size: 0.95em; color: #4527a0; font-weight: bold; text-align: center; margin-bottom: 10px; }
+        .stroke-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+        .stroke-chip {
+            background: #fff; border: 2px solid #b39ddb; border-radius: 12px;
+            padding: 6px 12px; font-size: 1.05em; color: #4527a0; font-weight: bold;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .stroke-num {
+            background: #7e57c2; color: #fff; border-radius: 50%;
+            width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
+            font-size: 0.78em; flex-shrink: 0;
+        }
+
+        /* ==================== 趣味问答（游戏化测验） ==================== */
+        .btn-quiz {
+            background: linear-gradient(135deg, #ab47bc 0%, #8e24aa 100%);
+            box-shadow: 0 6px 20px rgba(171,71,188,0.4);
+        }
+        .btn-quiz:hover {
+            transform: translateY(-4px) scale(1.03);
+            box-shadow: 0 10px 30px rgba(171,71,188,0.5);
+        }
+
+        .quiz-box {
+            width: 100%; margin-top: 6px; display: none;
+            background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+            border: 2px solid #ce93d8; border-radius: 16px;
+            padding: 16px; box-shadow: 0 4px 15px rgba(156,39,176,0.2);
+        }
+        .quiz-box.show { display: block; animation: quizPop 0.4s cubic-bezier(0.175,0.885,0.32,1.275); }
+        @keyframes quizPop { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .quiz-title { font-size: 1.1em; color: #6a1b9a; font-weight: bold; text-align: center; margin-bottom: 10px; }
+        .quiz-question { font-size: 1.2em; color: #4a148c; text-align: center; margin-bottom: 12px; line-height: 1.5; }
+        .quiz-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .quiz-option {
+            padding: 12px; border: 2px solid #ce93d8; border-radius: 12px;
+            background: #fff; cursor: pointer; font-size: 1.1em; color: #4a148c;
+            text-align: center; transition: all 0.25s; font-weight: bold;
+        }
+        .quiz-option:hover { background: #f3e5f5; transform: scale(1.04); }
+        .quiz-option.correct { background: #c8e6c9; border-color: #66bb6a; color: #1b5e20; }
+        .quiz-option.wrong { background: #ffcdd2; border-color: #ef9a9a; color: #b71c1c; }
+        .quiz-feedback { text-align: center; margin-top: 12px; font-size: 1.1em; font-weight: bold; min-height: 1.4em; }
+        .quiz-feedback.ok { color: #2e7d32; }
+        .quiz-feedback.no { color: #c62828; }
+        .quiz-close { display: block; margin: 12px auto 0; padding: 8px 22px; border: none; border-radius: 30px;
+            background: #ce93d8; color: #fff; font-weight: bold; cursor: pointer; font-size: 1em; }
+        .quiz-close:hover { background: #ba68c8; }
+
+        /* ==================== 徽章奖励特效 ==================== */
+        #badge-reward {
+            position: absolute; top: 42%; left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            display: flex; flex-direction: column; align-items: center;
+            pointer-events: none; z-index: 200; opacity: 0;
+        }
+        #badge-reward.show-badge {
+            animation: badgePop 2.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        .badge-icon {
+            font-size: 8em;
+            filter: drop-shadow(0 0 25px rgba(255, 215, 0, 0.9));
+            animation: badgeGlow 1s infinite alternate;
+        }
+        .badge-text {
+            font-size: 1.5em; color: #ff9f43; font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 12px;
+            background: #fff; padding: 10px 28px; border-radius: 30px;
+            border: 3px solid #ff9f43;
+            box-shadow: 0 6px 20px rgba(255, 159, 67, 0.4);
+        }
+
+        @keyframes badgePop {
+            0%   { transform: translate(-50%, -50%) scale(0) rotate(-10deg); opacity: 0; }
+            15%  { transform: translate(-50%, -50%) scale(1.4) rotate(5deg); opacity: 1; }
+            25%  { transform: translate(-50%, -50%) scale(1) rotate(-3deg); opacity: 1; }
+            80%  { transform: translate(-50%, -50%) scale(1) rotate(2deg); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(0) rotate(10deg); opacity: 0; }
+        }
+        @keyframes badgeGlow {
+            0%   { filter: drop-shadow(0 0 15px rgba(255,215,0,0.6)); transform: rotate(-8deg) scale(1); }
+            100% { filter: drop-shadow(0 0 45px rgba(255,215,0,1)); transform: rotate(8deg) scale(1.05); }
+        }
+
+        /* ==================== 标题装饰 ==================== */
+        .title-decoration {
+            position: absolute; top: -50px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.8em; font-weight: bold;
+            color: #ffd54f;
+            text-shadow:
+                0 3px 6px rgba(0,0,0,0.4),
+                0 0 30px rgba(255,213,79,0.5);
+            white-space: nowrap;
+            z-index: 5;
+            letter-spacing: 6px;
+            animation: titleGlow 3s ease-in-out infinite alternate;
+        }
+        @keyframes titleGlow {
+            from { text-shadow: 0 3px 6px rgba(0,0,0,0.4), 0 0 20px rgba(255,213,79,0.3); }
+            to   { text-shadow: 0 3px 6px rgba(0,0,0,0.4), 0 0 40px rgba(255,213,79,0.7); }
+        }
+
+        /* ==================== 角落装饰 ==================== */
+        .corner-deco {
+            position: absolute; width: 70px; height: 70px;
+            pointer-events: none; z-index: 3;
+            opacity: 0.7;
+        }
+        .corner-deco.tl { top: 12px; left: 12px; }
+        .corner-deco.tr { top: 12px; right: 12px; transform: scaleX(-1); }
+        .corner-deco.bl { bottom: 12px; left: 12px; transform: scaleY(-1); }
+        .corner-deco.br { bottom: 12px; right: 12px; transform: scale(-1); }
+
+        /* ==================== 正面核心生字展示（醒目大字） ==================== */
+        .core-display {
+            font-size: 5.6em; font-weight: bold; line-height: 1.05;
+            margin-bottom: 4px;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ff9f43 50%, #ffd54f 100%);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent; color: #ff7a45;
+            text-shadow: 0 4px 18px rgba(255,120,60,0.25);
+            filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12));
+            animation: corePop 0.5s cubic-bezier(0.175,0.885,0.32,1.275);
+        }
+        @keyframes corePop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        /* ==================== 课本风格两栏布局 ==================== */
+        .textbook-layout {
+            display: flex; gap: 18px; width: 100%;
+            align-items: stretch; margin-top: 4px;
+        }
+        .tb-left  { flex: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+        .tb-right { flex: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+        .tb-module {
+            background: #fffaf0;
+            border: 2px solid #e7d3a8; border-radius: 16px;
+            padding: 12px 16px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+        }
+        .tb-module .module-label {
+            font-size: 1.02em; font-weight: bold; color: #c0392b;
+            margin-bottom: 8px; padding-bottom: 6px;
+            border-bottom: 2px dashed #e7d3a8;
+        }
+        .module-value { font-size: 2.4em; font-weight: bold; color: #2c3e50; text-align: center; line-height: 1.2; }
+        .module-text  { font-size: 1.12em; color: #555; line-height: 1.65; }
+
+        /* 字形结构精简条（笔画 / 结构） */
+        .structure-strip {
+            display: flex; justify-content: space-around; align-items: stretch;
+            width: 100%; margin-bottom: 8px;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: 2px solid #90caf9; border-radius: 16px;
+            padding: 10px 6px; box-shadow: 0 3px 10px rgba(33,150,243,0.15);
+        }
+        .structure-strip .structure-item { flex: 1; text-align: center; }
+        .structure-strip .structure-item + .structure-item { border-left: 2px dashed #90caf9; }
+        .structure-strip .structure-label { font-size: 0.82em; color: #1565c0; font-weight: bold; margin-bottom: 3px; }
+        .structure-strip .structure-value { font-size: 1.35em; color: #0d47a1; font-weight: bold; }
+
+        /* ==================== 读一读 语音同步字幕 ==================== */
+        .read-caption {
+            width: 100%; margin: 4px 0 12px; padding: 12px 16px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(255,159,67,0.12), rgba(77,168,218,0.12));
+            border: 2px solid rgba(255,159,67,0.5);
+            display: none;
+        }
+        .read-caption.show { display: block; animation: blendPop 0.35s cubic-bezier(0.175,0.885,0.32,1.275); }
+        .rc-line {
+            font-size: 1.22em; color: #888; line-height: 1.7;
+            padding: 4px 12px; border-radius: 10px; margin: 3px 0;
+            transition: all 0.25s; border-left: 4px solid transparent;
+        }
+        .rc-line.active {
+            color: #fff; background: linear-gradient(135deg, #ff9f43 0%, #ff6b6b 100%);
+            border-left-color: #fff; transform: scale(1.02);
+            box-shadow: 0 2px 10px rgba(255,107,107,0.4);
+        }
+
+        /* ==================== 背面：田字格与笔画名称左右对齐 ==================== */
+        .write-row {
+            display: flex; gap: 20px; align-items: flex-start;
+            width: 100%; justify-content: center;
+        }
+        .strokes-side {
+            flex: 1; max-width: 160px;
+            display: flex; flex-direction: column; gap: 8px;
+            background: linear-gradient(135deg, #ede7f6 0%, #d1c4e9 100%);
+            border: 2px solid #b39ddb; border-radius: 16px;
+            padding: 12px 14px; box-shadow: 0 3px 10px rgba(103,58,183,0.15);
+            height: 190px; overflow-y: auto;       /* 与田字格等高，超出可滚动 */
+            scrollbar-width: thin;
+        }
+        .strokes-side .strokes-label { font-size: 0.95em; color: #4527a0; font-weight: bold; text-align: center; margin-bottom: 4px; }
+        .strokes-side .stroke-list { display: flex; flex-direction: column; gap: 6px; }
+        .strokes-side .stroke-chip {
+            background: #fff; border: 2px solid #b39ddb; border-radius: 10px;
+            padding: 4px 8px; font-size: 0.9em; color: #4527a0; font-weight: bold;
+            display: flex; align-items: center; gap: 5px; width: 100%; justify-content: flex-start;
+        }
+        .strokes-side .stroke-name { flex: 1; white-space: nowrap; }
+        /* 笔画类型徽标（基本笔画 / 折画） */
+        .stroke-type {
+            font-size: 0.62em; font-weight: normal; color: #7e57c2;
+            background: rgba(126,87,194,0.12); border-radius: 8px;
+            padding: 1px 6px; flex-shrink: 0;
+        }
+        /* 当前书写笔画高亮（笔顺动画 / 描红 / 重播 同步） */
+        .stroke-chip.active {
+            background: linear-gradient(135deg, #ffd54f 0%, #ff9f43 100%);
+            color: #fff; border-color: #ff9f43;
+            transform: scale(1.06);
+            box-shadow: 0 0 14px rgba(255,159,67,0.85);
+        }
+        .stroke-chip.active .stroke-type { color: rgba(255,255,255,0.92); background: rgba(255,255,255,0.22); }
+
+        /* ==================== 读一读 弹窗（叠加在左侧图片上方 · 毛玻璃面板） ==================== */
+        .read-popup {
+            /* —— 可动态配置配色变量：外部 ReadPopupConfig / 主题切换 / 图片主色自动注入均可覆盖 —— */
+            --rp-accent: #ff9f43;                 /* 主色（默认暖橙；运行时由图片主色或主题覆盖） */
+            --rp-accent-border: rgba(255,159,67,0.42);
+            --rp-text: #5a3a1a;                  /* 自适应前景色（随主色明度切换深/浅） */
+            --rp-head-bg: rgba(255,183,77,0.85);
+            --rp-focus-bg: rgba(255,159,67,0.30);
+            --rp-bg: transparent;                /* 背景透明（需求1）：图片自然透出 */
+
+            position: absolute;
+            left: 16px; right: 16px; bottom: 16px;   /* 锚定左侧图片底部，作为叠加层 */
+            z-index: 6;                               /* 位于图片与大字之上，但底部大字已上移，互不遮挡 */
+            display: none; flex-direction: column;
+            max-height: 46%;                          /* 相对 .modal-left 高度，避免遮挡图片上方关键内容 */
+            background: var(--rp-bg);                 /* ← 透明背景 */
+            -webkit-backdrop-filter: blur(8px) saturate(1.2);
+            backdrop-filter: blur(8px) saturate(1.2); /* 轻微毛玻璃仅提升可读性，不改变背景透明属性 */
+            border: 1px solid var(--rp-accent-border);
+            border-radius: 18px;
+            overflow-y: auto; padding: 0 16px 14px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--rp-accent-border) transparent;
+            box-shadow:
+                0 12px 32px rgba(0,0,0,0.28),
+                0 3px 10px rgba(0,0,0,0.16),
+                inset 0 0 0 1px var(--rp-accent-border);
+        }
+        .read-popup.show { display: flex; animation: readPop 0.42s cubic-bezier(0.175,0.885,0.32,1.275); }
+        @keyframes readPop {
+            from { opacity: 0; transform: translateY(22px) scale(0.985); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .read-popup-head {
+            position: sticky; top: 0; z-index: 2;
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 1.22em; font-weight: bold; color: var(--rp-text);
+            margin: 0 -16px 10px; padding: 12px 16px;   /* 通栏头部，与面板等宽 */
+            background: var(--rp-head-bg);
+            -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+            border-bottom: 2px solid var(--rp-accent);
+            border-radius: 18px 18px 0 0;
+        }
+        .rp-head-btns { display: flex; gap: 8px; align-items: center; }
+        .read-popup-theme, .read-popup-close {
+            border: none; background: var(--rp-accent-border); color: var(--rp-text);
+            width: 38px; height: 38px; border-radius: 50%; font-size: 1.15em;
+            cursor: pointer; flex-shrink: 0; line-height: 1;
+            transition: background .2s, transform .15s;
+        }
+        .read-popup-theme:hover, .read-popup-close:hover { background: var(--rp-accent); transform: scale(1.06); }
+
+        /* ==================== 描写练习 · 鼓励引导弹窗 ==================== */
+        .trace-guide-pop {
+            position: absolute; inset: 0; z-index: 30;
+            display: none; align-items: center; justify-content: center;
+            background: rgba(40,20,0,0.18);   /* 轻微遮罩，聚焦引导语 */
+            border-radius: 18px;
+        }
+        .trace-guide-pop.show { display: flex; animation: blendPop 0.35s cubic-bezier(0.175,0.885,0.32,1.275); }
+        .tgp-card {
+            background: linear-gradient(135deg, #fff7e6 0%, #ffe8c2 100%);
+            border: 3px solid #ff9f43; border-radius: 22px;
+            padding: 24px 28px; max-width: 86%; text-align: center;
+            box-shadow: 0 12px 34px rgba(255,159,67,0.45);
+        }
+        .tgp-emoji { font-size: 2.8em; line-height: 1; margin-bottom: 6px; }
+        .tgp-text { font-size: 1.12em; color: #bf360c; line-height: 1.65; margin: 6px 0 16px; font-weight: bold; }
+        .tgp-text b { color: #e53935; }
+        .tgp-btn {
+            background: linear-gradient(135deg, #ff9f43 0%, #f3801c 100%);
+            color: #fff; border: none; border-radius: 30px;
+            padding: 11px 28px; font-size: 1.05em; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 14px rgba(243,128,28,0.42);
+            transition: transform 0.2s;
+        }
+        .tgp-btn:hover { transform: translateY(-2px) scale(1.04); }
+        .tgp-btn:active { transform: scale(0.96); }
+        .rp-section { margin-bottom: 14px; border-radius: 16px; padding: 13px 18px; box-shadow: 0 3px 10px rgba(0,0,0,0.06); transition: all 0.25s; }
+        .rp-section .rp-label { font-size: 0.95em; font-weight: bold; margin-bottom: 6px; }
+        .rp-know { background: linear-gradient(135deg,#e8f5e9,#c8e6c9); border:2px solid #a5d6a7; }
+        .rp-know .rp-label { color:#388e3c; }
+        .rp-word { background: linear-gradient(135deg,#e3f2fd,#bbdefb); border:2px solid #90caf9; }
+        .rp-word .rp-label { color:#1565c0; }
+        .rp-sent { background: linear-gradient(135deg,#fff3e0,#ffe0b2); border:2px solid #ffb74d; }
+        .rp-sent .rp-label { color:#e65100; }
+        .rp-text { font-size: 1.16em; color:#444; line-height:1.6; }
+        .rp-section.active { outline: 3px solid #ff9f43; transform: scale(1.012); box-shadow: 0 0 18px rgba(255,159,67,0.5); }
+
+        /* 滚动跟随高亮：当前滚动居中段落以图片主色描边高亮，其余保持默认（与语音高亮 .active 互不冲突） */
+        .rp-section.rp-scrollfocus {
+            border-color: var(--rp-accent);
+            outline: 2px solid var(--rp-accent);
+            outline-offset: 1px;
+            box-shadow: 0 0 16px var(--rp-focus-bg);
+            transform: scale(1.015);
+        }
+
+        /* ==================== 移动端触控优化（桌面无副作用） ==================== */
+        /* 禁止双击缩放与点击延迟，保证按钮/网格点击即时响应 */
+        button, .grid-item, .quiz-option { touch-action: manipulation; }
+        /* 顶部拖动组与田字格书写需独占触摸，避免误触发页面滚动或缩放 */
+        .top-block, #tzg-container { touch-action: none; }
+
+        /* 触屏设备（无 hover 能力）下，取消 :hover 的位移/缩放/光晕残留，避免点击后元素卡在放大态 */
+        @media (hover: none) {
+            .grid-item:hover { transform: none !important; background: rgba(255,255,255,0) !important; box-shadow: none !important; }
+            .tb-btn:hover, .flip-btn:hover, .close-btn:hover, .spk-btn:hover,
+            .quiz-option:hover, .quiz-close:hover, .tgp-btn:hover, #tzg-container:hover { transform: none !important; }
+        }
+
+        /* ==================== 响应式适配 ==================== */
+        @media (max-width: 1024px) {
+            .modal-content { width: 92vw; height: 82vh; }
+            .flip-face { padding: 64px 22px 56px; }
+            .core-display { font-size: 4.6em; }
+            .strokes-side { max-width: 150px; }
+        }
+        @media (max-width: 900px) {
+            .app-container { aspect-ratio: auto; width: 94vw; height: 86dvh; max-width: none; max-height: none; }
+            .modal-content { flex-direction: column; height: 90vh; height: 90dvh; max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px); overflow-y: auto; }
+            .modal-left { width: 100%; height: 32%; border-right: none; border-bottom: 4px dashed #d4c2a5; padding-top: 8px; }
+            .modal-right { width: 100%; }
+            .flip-face { padding: 60px 16px 48px; }
+            .left-char-display { font-size: 2.6em; }
+            .pinyin { font-size: 1.8em; }
+            #tzg-container { width: 150px; height: 150px; }
+            .core-display { font-size: 3.6em; }
+            .structure-strip { flex-wrap: wrap; }
+            .write-row { flex-direction: column; align-items: center; }
+            .strokes-side { max-width: none; width: 100%; height: auto; }
+            .strokes-side .stroke-list { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+            .strokes-side .stroke-chip { width: auto; }
+            /* 移动端左侧图变矮，面板收窄高度（≤46%）并贴底，确保顶部大字不被遮挡，内容仍可滚动 */
+            .read-popup { max-height: 46%; left: 12px; right: 12px; bottom: 6px; }
+            .read-popup-body { padding: 0 2px; }
+        }
+        @media (max-width: 480px) {
+            .toolbar { gap: 8px; }
+            .tb-btn { font-size: 0.88em; padding: 9px 13px; }
+            .rp-text { font-size: 1.05em; }
+            .core-display { font-size: 3.2em; }
+            .read-popup-head { font-size: 1.1em; padding: 10px 14px; }
+        }
+
+        /* 竖屏设备（手机/平板竖持）：以高度驱动，让寻宝地图铺满可视区，卡片更大更易点按 */
+        @media (orientation: portrait) {
+            .app-container { aspect-ratio: auto; width: 94vw; height: 86dvh; max-width: none; max-height: none; }
+        }
+
+        /* ==================== 加载动画 ==================== */
+        .loading-screen {
+            position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh; height: 100dvh;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 9999; transition: opacity 0.8s ease, visibility 0s 0.8s;
+            /* 避让安全区，加载动画居中于可见区域 */
+            box-sizing: border-box;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
+        /* 隐藏后立即可见性切到 hidden（延迟至淡出动画结束），彻底杜绝遮挡点击；JS 还会在淡出后置 display:none */
+        .loading-screen.hide { opacity: 0; pointer-events: none; visibility: hidden; }
+        .loading-spinner {
+            width: 60px; height: 60px;
+            border: 5px solid rgba(255,213,79,0.2);
+            border-top-color: #ffd54f;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            color: #ffd54f; margin-top: 20px;
+            font-size: 1.3em; letter-spacing: 3px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 加载画面 -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">正在准备探索之旅...</div>
+    </div>
+
+    <!-- 兜底：即使 CDN/脚本加载缓慢或被网络阻塞，最多 3 秒后强制隐藏加载页，
+         避免手机/平板卡在“正在加载中”并拦截所有点击（独立于后续阻塞脚本） -->
+    <script>
+      (function () {
+        function forceHide() {
+          var l = document.getElementById('loadingScreen');
+          if (l) {
+            l.classList.add('hide');
+            setTimeout(function () { if (l) l.style.display = 'none'; }, 900);
+          }
+        }
+        window.__forceHideLoader = forceHide;
+        setTimeout(forceHide, 3000);
+      })();
+    </script>
+
+    <!-- Three.js 3D粒子背景 -->
+    <canvas id="three-canvas"></canvas>
+
+    <!-- 寻宝地图主场景 -->
+    <div class="app-container" id="appContainer">
+        <!-- 场景切换标签栏 -->
+        <div class="scene-tabs" id="sceneTabs">
+            <button class="scene-tab active" data-scene="nature" onclick="switchScene('nature')">🌿 自然探索</button>
+            <button class="scene-tab" data-scene="zoo" onclick="switchScene('zoo')">🦁 动物王国</button>
+        </div>
+
+        <!-- 标题 -->
+        <div class="title-decoration">✨ 自然元素探索之旅 ✨</div>
+
+        <!-- 角落装饰SVG -->
+        <svg class="corner-deco tl" viewBox="0 0 70 70"><path d="M5,5 L5,55 Q5,65 15,65 L65,65" fill="none" stroke="#ffd54f" stroke-width="3" stroke-linecap="round"/><circle cx="5" cy="5" r="5" fill="#ffd54f"/></svg>
+        <svg class="corner-deco tr" viewBox="0 0 70 70"><path d="M5,5 L5,55 Q5,65 15,65 L65,65" fill="none" stroke="#ffd54f" stroke-width="3" stroke-linecap="round"/><circle cx="5" cy="5" r="5" fill="#ffd54f"/></svg>
+        <svg class="corner-deco bl" viewBox="0 0 70 70"><path d="M5,5 L5,55 Q5,65 15,65 L65,65" fill="none" stroke="#ffd54f" stroke-width="3" stroke-linecap="round"/><circle cx="5" cy="5" r="5" fill="#ffd54f"/></svg>
+        <svg class="corner-deco br" viewBox="0 0 70 70"><path d="M5,5 L5,55 Q5,65 15,65 L65,65" fill="none" stroke="#ffd54f" stroke-width="3" stroke-linecap="round"/><circle cx="5" cy="5" r="5" fill="#ffd54f"/></svg>
+
+        <!-- 背景图 -->
+        <img src="背景1.png" class="main-bg" alt="自然元素探索地图">
+
+        <!-- 5×3 热区交互网格 -->
+        <div class="grid-overlay" id="gridOverlay"></div>
+    </div>
+
+    <!-- 知识卡片弹窗（3D翻转） -->
+    <div class="modal-overlay" id="cardModal">
+        <div class="modal-content">
+            <!-- 左侧：动态放大截取大图 + 大字展示 -->
+            <div class="modal-left" id="modalImage">
+                <div class="left-char-display" id="leftCharDisplay">日</div>
+                <!-- 读一读 弹窗：叠加在左侧图片上方（毛玻璃面板，不遮挡图片关键内容） -->
+                <div class="read-popup" id="readPopup">
+                    <div class="read-popup-head">
+                        <span>📖 读一读</span>
+                        <span class="rp-head-btns">
+                            <button class="read-popup-theme" id="readPopupTheme" title="切换配色主题">🎨</button>
+                            <button class="read-popup-close" id="readPopupClose" title="关闭">✖</button>
+                        </span>
+                    </div>
+                    <div class="read-popup-body" id="readPopupBody"></div>
+                </div>
+            </div>
+
+            <!-- 右侧：可翻转教学卡片 -->
+            <div class="modal-right">
+                <div class="close-btn" onclick="event.stopPropagation(); closeModal()">✖</div>
+                <button class="flip-btn" id="flipBtn" onclick="event.stopPropagation(); flipCard()">🔄 翻到背面 ✍️</button>
+
+                <div class="flip-card-inner" id="flipCardInner">
+                    <!-- 正面：基础认读 + 互动学习 -->
+                    <div class="flip-face flip-front">
+                        <!-- 可拖动顶部组：核心字 + 拼音 + 英语单词 + 小喇叭（整体左移） -->
+                        <div class="top-block" id="topBlock">
+                            <div class="core-display"><span class="letter big-char" id="ui-core">日</span></div>
+                            <div class="char-header" id="charHeader">
+                                <div class="py-row">
+                                    <span class="pinyin" id="ui-pinyin">rì</span>
+                                    <button class="spk-btn" id="btnPinyin" title="拼音拼读">🔊</button>
+                                </div>
+                                <div class="en-row">
+                                    <span class="english" id="ui-english">SUN</span>
+                                    <button class="spk-btn" id="btnEnglish" title="英语拼读">🔊</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 组词（位于拼音下方） -->
+                        <div class="words" id="ui-words">组词：加载中...</div>
+
+                        <!-- 顶部操作按钮栏（认读 / 学习类） -->
+                        <div class="toolbar">
+                            <button id="btn-audio" class="tb-btn tb-audio">📖 读一读</button>
+                            <button id="btn-quiz" class="tb-btn tb-quiz">🎮 趣味问答</button>
+                        </div>
+
+                        <!-- 拼读高亮展示区（点击拼音/英语小喇叭时显示，浮于卡片右上） -->
+                        <div class="blend-bar" id="blendBar">
+                            <div class="blend-title" id="blendTitle">🔤 拼读练习</div>
+                            <div class="blend-chips" id="blendChips"></div>
+                        </div>
+
+                        <!-- 部首与字形三合一模块（部首 / 笔画 / 结构 融于同一加宽模块） -->
+                        <div class="info-module" id="ui-radical-box">
+                            <div class="module-label">📕 部首与字形</div>
+                            <div class="info-grid">
+                                <div class="info-cell is-radical"><div class="ic-label">部首</div><div class="ic-val struct-radical">日</div></div>
+                                <div class="info-cell"><div class="ic-label">笔画</div><div class="ic-val struct-strokes">4 画</div></div>
+                                <div class="info-cell"><div class="ic-label">结构</div><div class="ic-val struct-type">独体字</div></div>
+                            </div>
+                        </div>
+
+                        <!-- 随机奖励动画容器 -->
+                        <div id="badge-reward">
+                            <div class="badge-icon">🌟</div>
+                            <div class="badge-text">解锁徽章！</div>
+                        </div>
+
+                        <!-- 趣味问答面板（默认隐藏） -->
+                        <div class="quiz-box" id="quizBox">
+                            <div class="quiz-title">🎮 趣味小测验</div>
+                            <div class="quiz-question" id="quizQuestion"></div>
+                            <div class="quiz-options" id="quizOptions"></div>
+                            <div class="quiz-feedback" id="quizFeedback"></div>
+                            <button class="quiz-close" id="quizClose">收起测验</button>
+                        </div>
+                    </div>
+
+                    <!-- 背面：书写练习（田字格 / 笔顺动画 / 描红讲解 / 描红练习 / 笔画名称） -->
+                    <div class="flip-face flip-back">
+                        <h3 class="back-title">✍️ 书写练习</h3>
+
+                        <!-- 书写操作按钮栏 -->
+                        <div class="toolbar">
+                            <button id="btn-animate" class="tb-btn tb-animate">▶ 笔顺动画</button>
+                            <button id="btn-trace-guide" class="tb-btn tb-trace-guide">📝 描红讲解</button>
+                            <button id="btn-trace" class="tb-btn tb-trace">✍️ 描红练习</button>
+                        </div>
+
+                        <!-- 田字格 + 左侧笔画名称（左右对齐，课本式） -->
+                        <div class="write-row">
+                            <!-- 笔画名称：置于田字格左侧，与田字格对齐 -->
+                            <div class="strokes-side" id="ui-strokes">
+                                <div class="strokes-label">🖌️ 笔画名称（共 <span class="stroke-num-total">?</span> 笔）</div>
+                                <div class="stroke-list"></div>
+                            </div>
+
+                            <!-- 田字格测验区 -->
+                            <div id="tzg-container" title="点击田字格开启临摹测验">
+                                <div id="tzg-base"></div>
+                                <div id="tzg-trace"></div>
+                            </div>
+                        </div>
+
+                        <div class="trace-tip">先点「描红讲解」看写法，再点「描红练习」用蓝笔描红；写完后蓝色笔迹会一直保留，直到点其它按钮～</div>
+
+                        <!-- 描写练习 · 鼓励引导弹窗（点击「描红练习」后弹出，含鼓励性语言） -->
+                        <div class="trace-guide-pop" id="traceGuidePop">
+                            <div class="tgp-card">
+                                <div class="tgp-emoji">🌟</div>
+                                <div class="tgp-text" id="tgpText"></div>
+                                <button class="tgp-btn" id="tgpStart">开始练习 ✍️</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 外部库引入 ==================== -->
+    <!-- Hanzi Writer - 汉字笔顺引擎 -->
+    <script async src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
+    <!-- Canvas Confetti - 撒花特效 -->
+    <script async src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <!-- ==================== 数据层 ==================== -->
+    <script>
+    // ========== 自然元素识字数据 ==========
+    // 字段说明：char 汉字 | pinyin 拼音 | english 英文 | words 组词 | meaning 释义
+    //          radical 部首 | strokes 笔画数 | structure 字形结构 | sentence 造句示例 | strokesName 笔画名称(按笔顺)
+    const literacyData = [
+        // 第一排：天文气象
+        { id: "ri",   char: "日", pinyin: "rì",   english: "SUN",       words: ["日出", "节日"], meaning: "太阳给我们带来光明和温暖，每天东升西落。", radical: "日", strokes: 4,  structure: "独体字",   sentence: "早晨，红红的太阳从东方升起。", strokesName: ["竖","横折","横","横"], image: "日.mp4", col: 0, row: 0 },
+        { id: "yue",  char: "月", pinyin: "yuè",  english: "MOON",      words: ["月亮", "明月"], meaning: "月亮是地球的卫星，晚上会发出柔和的光。", radical: "月", strokes: 4,  structure: "独体字",   sentence: "十五的月亮又圆又亮。", strokesName: ["撇","横折钩","横","横"], image: "月.mp4", col: 1, row: 0 },
+        { id: "xing", char: "星", pinyin: "xīng", english: "STAR",      words: ["星星", "星空"], meaning: "星星是夜空中闪闪发光的天体，数量非常多。", radical: "日", strokes: 9,  structure: "上下结构", sentence: "夜空中闪烁着无数颗小星星。", strokesName: ["竖","横折","横","横","撇","横","横","竖","横"], image: "星.mp4", col: 2, row: 0 },
+        { id: "yun",  char: "云", pinyin: "yún",  english: "CLOUD",     words: ["白云", "云朵"], meaning: "云是天空中的水汽凝结成的白色漂浮物。", radical: "二", strokes: 4,  structure: "独体字",   sentence: "天空中飘着一朵朵白云。", strokesName: ["横","横","撇折","点"], image: "云.mp4", col: 3, row: 0 },
+        { id: "feng1",char: "风", pinyin: "fēng", english: "WIND",      words: ["大风", "风车"], meaning: "风是空气流动形成的，可以吹动树叶和风车。", radical: "风", strokes: 4,  structure: "半包围结构", sentence: "春风轻轻地吹过柳枝。", strokesName: ["撇","横折弯钩","撇","点"], image: "风.mp4", col: 4, row: 0 },
+
+        // 第二排：自然现象
+        { id: "bing", char: "冰", pinyin: "bīng", english: "ICE",       words: ["冰雪", "结冰"], meaning: "冰是水在很冷的时候结成的固体，摸起来凉凉的、滑滑的。冬天湖面会结冰。", radical: "冫", strokes: 6,  structure: "左右结构",   sentence: "冬天，河面上结了一层薄薄的冰。", strokesName: ["点","提","竖钩","横撇","撇","捺"], image: "冰.mp4", col: 0, row: 1 },
+        { id: "yu",   char: "雨", pinyin: "yǔ",   english: "RAIN",      words: ["下雨", "雨水"], meaning: "雨是从云中降落的水滴，能滋润花草树木。", radical: "雨", strokes: 8,  structure: "独体字",   sentence: "下雨了，小动物们都躲回了家。", strokesName: ["横","竖","横折钩","竖","点","点","点","点"], image: "雨.mp4", col: 1, row: 1 },
+        { id: "xue",  char: "雪", pinyin: "xuě",  english: "SNOW",      words: ["下雪", "雪人"], meaning: "雪是天气寒冷时从天上飘下来的白色雪花。", radical: "雨", strokes: 11, structure: "上下结构", sentence: "冬天到了，天上飘起了雪花。", strokesName: ["横","竖","横折钩","竖","点","点","点","点","横折","横","横"], image: "雪.mp4", col: 2, row: 1 },
+        { id: "shan", char: "山", pinyin: "shān", english: "MOUNTAIN",  words: ["高山", "爬山"], meaning: "山是地面隆起的高地，山上有很多植物和动物。", radical: "山", strokes: 3,  structure: "独体字",   sentence: "远处的高山上覆盖着白雪。", strokesName: ["竖","竖折","竖"], image: "山.mp4", col: 3, row: 1 },
+        { id: "shi",  char: "石", pinyin: "shí",  english: "ROCK",      words: ["石头", "岩石"], meaning: "石头是坚硬的矿物，有的圆圆的，有的尖尖的。", radical: "石", strokes: 5,  structure: "独体字",   sentence: "溪水里的石头被冲刷得圆圆的。", strokesName: ["横","撇","竖","横折","横"], image: "石.mp4", col: 4, row: 1 },
+
+        // 第三排：地理元素
+        { id: "shui", char: "水", pinyin: "shuǐ", english: "WATER",     words: ["喝水", "河水"], meaning: "水是生命之源，我们每天都需要喝干净的水。", radical: "水", strokes: 4,  structure: "独体字",   sentence: "河水清澈，小鱼在水中游来游去。", strokesName: ["竖钩","横撇","撇","捺"], image: "水.mp4", col: 0, row: 2 },
+        { id: "huo",  char: "火", pinyin: "huǒ",  english: "FIRE",      words: ["大火", "篝火"], meaning: "火可以取暖、做饭，但小朋友要远离火源哦！", radical: "火", strokes: 4,  structure: "独体字",   sentence: "篝火温暖了露营的夜晚。", strokesName: ["点","撇","撇","捺"], image: "火.mp4", col: 1, row: 2 },
+        { id: "tu",   char: "土", pinyin: "tǔ",   english: "EARTH",     words: ["泥土", "土地"], meaning: "泥土是大地的皮肤，花草树木都生长在土里。", radical: "土", strokes: 3,  structure: "独体字",   sentence: "泥土里钻出了一棵嫩绿的小芽。", strokesName: ["横","竖","横"], image: "土.mp4", col: 2, row: 2 },
+        { id: "sha",  char: "沙", pinyin: "shā",  english: "SAND",      words: ["沙子", "沙漠"], meaning: "沙子是细小的石粒，沙滩上有好多好玩的沙子。", radical: "氵", strokes: 7,  structure: "左右结构", sentence: "沙滩上留下了一串小脚印。", strokesName: ["点","点","提","竖","撇","点","撇"], image: "沙.mp4", col: 3, row: 2 },
+        { id: "di",   char: "地", pinyin: "dì",   english: "LAND",      words: ["地球", "草地"], meaning: "大地是我们脚下踩着的土地，也是我们的家园。", radical: "土", strokes: 6,  structure: "左右结构", sentence: "草地上开满了五颜六色的小花。", strokesName: ["横","竖","横","横折钩","竖","竖弯钩"], image: "地.mp4", col: 4, row: 2 }
+    ];
+
+    // ========== 动物园识字数据（动物王国，资源位于项目根目录） ==========
+    // 字段结构与 literacyData 完全一致，复用全部交互逻辑
+    const zooData = [
+        // 第一排：十二生肖前六
+        { id: "shu",   char: "鼠", pinyin: "shǔ",  english: "RAT",       words: ["老鼠", "田鼠"], meaning: "鼠是一种小巧灵活的哺乳动物，门牙会不断生长，所以需要经常磨牙。", radical: "鼠", strokes: 13, structure: "独体字", sentence: "小老鼠偷偷从洞里钻出来找食物吃。", strokesName: ["撇","竖","横","横折","横","横","竖提","点","点","竖提","点","点","斜钩"], image: "鼠.mp4", col: 0, row: 0 },
+        { id: "niu",  char: "牛", pinyin: "niú",  english: "OX",        words: ["黄牛", "奶牛"], meaning: "牛是勤劳的动物，能帮农民耕田拉车，还给我们提供牛奶。", radical: "牛", strokes: 4,  structure: "独体字", sentence: "老牛在河边悠闲地吃着青草。", strokesName: ["撇","横","横","竖"], image: "牛.mp4", col: 1, row: 0 },
+        { id: "hu",   char: "虎", pinyin: "hǔ",   english: "TIGER",     words: ["老虎", "猛虎"], meaning: "虎是森林之王，身上有漂亮的条纹，非常威武强壮。", radical: "虍", strokes: 8,  structure: "半包围结构", sentence: "大老虎在山林里大声吼叫。", strokesName: ["竖","横","横撇","撇","横","竖弯钩","撇","横折弯钩"], image: "虎.mp4", col: 2, row: 0 },
+        { id: "tu",   char: "兔", pinyin: "tù",   english: "RABBIT",    words: ["兔子", "白兔"], meaning: "兔有长长的耳朵和短尾巴，喜欢蹦蹦跳跳地吃胡萝卜。", radical: "刀", strokes: 8,  structure: "上下结构", sentence: "小白兔在草地上快乐地跳来跳去。", strokesName: ["撇","横撇","竖","横折","横","撇","竖弯钩","点"], image: "兔.mp4", col: 3, row: 0 },
+        { id: "long", char: "龙", pinyin: "lóng", english: "DRAGON",    words: ["巨龙", "龙船"], meaning: "龙是中国神话中的神兽，象征着力量、吉祥和好运。", radical: "龙", strokes: 5,  structure: "独体字", sentence: "端午节大家划着龙船在河上比赛。", strokesName: ["横","撇","竖弯钩","撇","点"], image: "龙.mp4", col: 4, row: 0 },
+        { id: "she",  char: "蛇", pinyin: "shé",  english: "SNAKE",     words: ["毒蛇", "蟒蛇"], meaning: "蛇没有脚，靠身体蜿蜒爬行，每年都会蜕一次皮长出新皮。", radical: "虫", strokes: 11, structure: "左右结构", sentence: "小蛇在草丛中悄悄地爬行。", strokesName: ["撇","撇","横撇","捺","横","竖","横","横","横","竖","竖弯钩"], image: "蛇.mp4", col: 5, row: 0 },
+
+        // 第二排：十二生肖后六
+        { id: "ma",   char: "马", pinyin: "mǎ",   english: "HORSE",     words: ["小马", "骏马"], meaning: "马跑得很快，古代时是重要的交通工具和作战坐骑。", radical: "马", strokes: 3,  structure: "独体字", sentence: "小马在草原上自由自在地奔跑。", strokesName: ["横折","竖折折钩","横"], image: "马.mp4", col: 0, row: 1 },
+        { id: "yang", char: "羊", pinyin: "yáng", english: "SHEEP",     words: ["绵羊", "山羊"], meaning: "羊性情温顺，身上的毛可以做成温暖的毛衣和毯子。", radical: "羊", strokes: 6,  structure: "独体字", sentence: "小羊在山坡上咩咩地叫着吃草。", strokesName: ["点","撇","横","横","横","竖"], image: "羊.mp4", col: 1, row: 1 },
+        { id: "hou",  char: "猴", pinyin: "hóu",  english: "MONKEY",    words: ["猴子", "猿猴"], meaning: "猴聪明又灵巧，喜欢在树上跳来跳去，最爱吃桃子和香蕉。", radical: "犭", strokes: 12, structure: "左右结构", sentence: "小猴子在树上荡秋千玩得真开心。", strokesName: ["撇","弯钩","撇","撇","竖","横折","横","撇","横","横","撇","捺"], image: "猴.mp4", col: 2, row: 1 },
+        { id: "ji",   char: "鸡", pinyin: "jī",   english: "ROOSTER",   words: ["公鸡", "母鸡"], meaning: "鸡每天早上打鸣叫人们起床，还会下蛋给我们吃。", radical: "又", strokes: 7,  structure: "左右结构", sentence: "大公鸡站在墙头上喔喔地打鸣。", strokesName: ["横撇","点","撇","竖弯钩","横折","横","横"], image: "鸡.mp4", col: 3, row: 1 },
+        { id: "gou",  char: "狗", pinyin: "gǒu",  english: "DOG",       words: ["小狗", "花狗"], meaning: "狗是人类最忠诚的朋友，会看家护院、帮助警察抓坏人。", radical: "犭", strokes: 8,  structure: "左右结构", sentence: "小狗看见主人回家高兴地摇尾巴。", strokesName: ["撇","撇","竖","撇","横","竖钩","撇","点"], image: "狗.mp4", col: 4, row: 1 },
+        { id: "zhu",  char: "猪", pinyin: "zhū",  english: "PIG",       words: ["小猪", "野猪"], meaning: "猪胖乎乎的，鼻子大大的，爱睡觉也爱吃东西。", radical: "犭", strokes: 11, structure: "左右结构", sentence: "小猪在泥坑里滚来滚去玩得开心。", strokesName: ["撇","撇","竖","撇","横","撇","弯钩","撇","撇","撇","横"], image: "猪.mp4", col: 5, row: 1 },
+
+        // 第三排：更多动物朋友
+        { id: "mao",  char: "猫", pinyin: "māo",  english: "CAT",       words: ["小猫", "花猫"], meaning: "猫眼睛亮亮的，晚上也能看清东西，最喜欢捉老鼠和睡懒觉。", radical: "犭", strokes: 11, structure: "左右结构", sentence: "小花猫趴在窗台上晒太阳。", strokesName: ["撇","撇","竖","撇","横","撇","竖弯钩","横","撇","撇","横"], image: "猫.mp4", col: 0, row: 2 },
+        { id: "xiang",char: "象",pinyin: "xiàng",english: "ELEPHANT",  words: ["大象", "象牙"], meaning: "象是世界上最大的陆地动物，长长的鼻子能卷起很重的东西。", radical: "⺤", strokes: 11, structure: "独体字", sentence: "大象用长长的鼻子喷水洗澡。", strokesName: ["撇","横撇","竖","横折","横","撇","弯钩","撇","撇","撇","捺"], image: "象.mp4", col: 1, row: 2 },
+        { id: "xiong",char: "熊",pinyin: "xióng",english: "BEAR",      words: ["黑熊", "熊猫"], meaning: "熊力气很大，冬天要冬眠，喜欢吃蜂蜜和鱼。", radical: "灬", strokes: 14, structure: "上下结构", sentence: "大熊在森林里寻找蜂蜜吃。", strokesName: ["撇折","点","竖","横折钩","横","横","撇","竖弯钩","撇","竖弯钩","点","点","点","点"], image: "狮.jpg", col: 2, row: 2 },
+        { id: "shi2", char: "狮",pinyin: "shī",  english: "LION",      words: ["狮子", "雄狮"], meaning: "狮是草原之王，雄狮有威风凛凛的鬃毛，吼声能传很远。", radical: "犭", strokes: 9,  structure: "左右结构", sentence: "雄狮站在岩石上守护着它的领地。", strokesName: ["撇","弯钩","撇","竖","撇","横","竖","横折钩","竖"], image: "狮.mp4", col: 3, row: 2 },
+        { id: "niao", char: "鸟",pinyin: "niǎo",  english: "BIRD",      words: ["小鸟", "飞鸟"], meaning: "鸟有羽毛和翅膀，能在天空中自由飞翔，唱出动听的歌。", radical: "鸟", strokes: 5,  structure: "独体字", sentence: "小鸟在树枝上叽叽喳喳地唱歌。", strokesName: ["撇","横折钩","点","竖折折钩","横"], image: "鸟.mp4", col: 4, row: 2 },
+        { id: "yu2",  char: "鱼",pinyin: "yú",   english: "FISH",       words: ["小鱼", "金鱼"], meaning: "鱼生活在水里，用鳃呼吸，用鳍游泳，摆动尾巴前进。", radical: "鱼", strokes: 8,  structure: "独体字", sentence: "小鱼在清澈的河水里游来游去。", strokesName: ["撇","横撇","竖","横折","横","竖","横","横"], image: "鱼.mp4", col: 5, row: 2 }
+    ];
+
+    // ========== 奖励图标库 ==========
+    const rewardLibrary = [
+        { icon: '🌟', text: '解锁星星徽章！' },
+        { icon: '🌸', text: '获得一朵小红花！' },
+        { icon: '👍', text: '太棒啦，给你大拇指！' },
+        { icon: '🏆', text: '识字小冠军！' },
+        { icon: '👑', text: '汉字小国王！' },
+        { icon: '🎈', text: '气球飞起来啦！' },
+        { icon: '🦋', text: '蝴蝶为你跳舞！' },
+        { icon: '🍭', text: '甜甜的奖励！' }
+    ];
+    </script>
+
+    <!-- ==================== 应用逻辑 ==================== -->
+    <script>
+    // ==================== 全局变量 ====================
+    let baseWriter = null;       // 黑色笔顺动画 / 字形参考层
+    let traceWriter = null;      // 蓝色手写描红层（持久，不被动画清除）
+    let traceCompleted = false;  // 用户是否已写完（写完则保留蓝迹，不再重置）
+    let traceQuizActive = false; // 描红测验是否进行中
+    let lastMistakeSpeak = 0;    // 描红写错语音提示节流时间戳（避免连续误触反复播报）
+    const TRACE_WIDTH = 4;       // 黑 / 蓝笔划统一粗细（保证两者完全一致）
+    let threeScene = null;
+    let currentCard = null;   // 当前打开的知识卡片数据
+    let blendType = null;     // 拼读浮窗类型：null / 'pinyin' / 'english'（用于喇叭显隐切换）
+    let topDrag = { x:0, y:0, dragging:false, sx:0, sy:0, ox:0, oy:0 };  // 顶部组拖动状态
+
+    // ==================== 场景管理 ====================
+    let currentScene = 'nature';  // 当前场景：'nature'（自然元素）| 'zoo'（动物王国）
+    const SCENE_CONFIG = {
+        nature: { data: literacyData, bgSrc: '背景1.png', title: '🌿 自然元素探索之旅', cols: 5, speakPrefix: '自然元素' },
+        zoo:    { data: zooData,     bgSrc: '背景图2.jpg', title: '🦁 动物王国探索之旅', cols: 6, speakPrefix: '动物朋友' }
+    };
+
+    // ==================== 初始化入口 ====================
+    document.addEventListener('DOMContentLoaded', () => {
+        // 3D 背景依赖外部 CDN（three.js）；若离线 / 网络受限导致加载失败，绝不能阻塞主功能
+        try {
+            initThreeBackground();
+        } catch (e) {
+            console.warn('3D 背景初始化失败（不影响主功能，已回退纯色渐变背景）：', e);
+        }
+        try {
+            buildGrid();   // 默认使用 currentScene（='nature'）
+            initTopDrag();
+        } catch (e) {
+            console.error('主场景初始化出错：', e);
+        }
+        // 无论初始化是否成功，都隐藏加载画面，避免永久卡在“正在准备…”状态
+        setTimeout(() => {
+            const loader = document.getElementById('loadingScreen');
+            if (loader) {
+                loader.classList.add('hide');
+                setTimeout(() => { if (loader) loader.style.display = 'none'; }, 900);
+            }
+        }, 1200);
+    });
+
+    // 顶部组（核心字 + 拼音 + 英语 + 喇叭）拖动：按住拖动即可移动，点击按钮不触发拖动
+    function initTopDrag(){
+        const block = document.getElementById('topBlock');
+        if (!block) return;
+        block.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('button')) return;   // 点击小喇叭等按钮时不拖动
+            topDrag.pending = true;
+            topDrag.dragging = false;
+            topDrag.sx = e.clientX; topDrag.sy = e.clientY;
+            topDrag.ox = topDrag.x;    topDrag.oy = topDrag.y;
+            try { block.setPointerCapture(e.pointerId); } catch(err){}
+        });
+        block.addEventListener('pointermove', (e) => {
+            if (!topDrag.pending && !topDrag.dragging) return;
+            const dx = e.clientX - topDrag.sx;
+            const dy = e.clientY - topDrag.sy;
+            // 仅当移动超过阈值才判定为拖动，避免点击 / 轻微滑动误触发位移（移动端尤为重要）
+            if (!topDrag.dragging && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) topDrag.dragging = true;
+            if (topDrag.dragging) {
+                topDrag.x = topDrag.ox + dx;
+                topDrag.y = topDrag.oy + dy;
+                block.style.transform = `translate(${topDrag.x}px, ${topDrag.y}px)`;
+            }
+        });
+        const end = () => { topDrag.dragging = false; topDrag.pending = false; };
+        block.addEventListener('pointerup', end);
+        block.addEventListener('pointercancel', end);
+    }
+
+    // ==================== Three.js 3D粒子背景 ====================
+    function initThreeBackground() {
+        if (threeScene) return;                        // 避免重复初始化（async 加载可能触发多次）
+        if (typeof THREE === 'undefined') return;      // CDN 未就绪时直接跳过，回退纯色背景
+        const canvas = document.getElementById('three-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 50;
+
+        threeScene = { scene, camera, renderer };
+
+        // ---- 创建多种粒子系统 ----
+
+        // 1. 金色萤火虫/星光粒子（主粒子）
+        const fireflyCount = 120;
+        const fireflyGeom = new THREE.BufferGeometry();
+        const fireflyPos = new Float32Array(fireflyCount * 3);
+        const fireflySizes = new Float32Array(fireflyCount);
+        const fireflyPhases = new Float32Array(fireflyCount);
+
+        for (let i = 0; i < fireflyCount; i++) {
+            fireflyPos[i * 3]     = (Math.random() - 0.5) * 120;
+            fireflyPos[i * 3 + 1] = (Math.random() - 0.5) * 70;
+            fireflyPos[i * 3 + 2] = (Math.random() - 0.5) * 40 - 10;
+            fireflySizes[i] = Math.random() * 3 + 1.5;
+            fireflyPhases[i] = Math.random() * Math.PI * 2;
+        }
+        fireflyGeom.setAttribute('position', new THREE.BufferAttribute(fireflyPos, 3));
+        fireflyGeom.setAttribute('size', new THREE.BufferAttribute(fireflySizes, 1));
+
+        const fireflyMat = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 },
+                uColor: { value: new THREE.Color(0xffd54f) }
+            },
+            vertexShader: `
+                attribute float size;
+                varying float vAlpha;
+                uniform float uTime;
+                void main() {
+                    vec3 pos = position;
+                    pos.y += sin(uTime * 0.8 + position.x * 0.1) * 2.0;
+                    pos.x += cos(uTime * 0.5 + position.y * 0.08) * 1.5;
+                    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                    gl_PointSize = size * (250.0 / -mvPosition.z);
+                    gl_Position = projectionMatrix * mvPosition;
+                    vAlpha = 0.4 + 0.6 * sin(uTime * 2.0 + position.x + position.y);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 uColor;
+                varying float vAlpha;
+                void main() {
+                    float d = length(gl_PointCoord - 0.5);
+                    if (d > 0.5) discard;
+                    float glow = 1.0 - smoothstep(0.0, 0.5, d);
+                    glow = pow(glow, 1.5);
+                    gl_FragColor = vec4(uColor, glow * vAlpha);
+                }
+            `,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        const fireflies = new THREE.Points(fireflyGeom, fireflyMat);
+        scene.add(fireflies);
+
+        // 2. 彩色梦幻尘埃粒子
+        const dustCount = 80;
+        const dustGeom = new THREE.BufferGeometry();
+        const dustPos = new Float32Array(dustCount * 3);
+        const dustColors = new Float32Array(dustCount * 3);
+
+        for (let i = 0; i < dustCount; i++) {
+            dustPos[i * 3]     = (Math.random() - 0.5) * 140;
+            dustPos[i * 3 + 1] = (Math.random() - 0.5) * 80;
+            dustPos[i * 3 + 2] = (Math.random() - 0.5) * 30 - 15;
+            // 随机柔和色彩
+            const hue = Math.random();
+            const color = new THREE.Color().setHSL(hue, 0.7, 0.65);
+            dustColors[i * 3]     = color.r;
+            dustColors[i * 3 + 1] = color.g;
+            dustColors[i * 3 + 2] = color.b;
+        }
+        dustGeom.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+        dustGeom.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
+
+        const dustMat = new THREE.ShaderMaterial({
+            uniforms: { uTime: { value: 0 } },
+            vertexShader: `
+                attribute vec3 color;
+                varying vec3 vColor;
+                varying float vAlpha;
+                uniform float uTime;
+                void main() {
+                    vColor = color;
+                    vec3 pos = position;
+                    pos.y += sin(uTime * 0.3 + position.z * 0.2) * 3.0;
+                    pos.x += sin(uTime * 0.2 + position.y * 0.15) * 2.0;
+                    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                    gl_PointSize = 2.5 * (200.0 / -mvPosition.z);
+                    gl_Position = projectionMatrix * mvPosition;
+                    vAlpha = 0.3 + 0.4 * sin(uTime * 1.5 + position.x * 0.1);
+                }
+            `,
+            fragmentShader: `
+                varying vec3 vColor;
+                varying float vAlpha;
+                void main() {
+                    float d = length(gl_PointCoord - 0.5);
+                    if (d > 0.5) discard;
+                    float alpha = (1.0 - d * 2.0) * vAlpha;
+                    gl_FragColor = vec4(vColor, alpha * 0.6);
+                }
+            `,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        const dustParticles = new THREE.Points(dustGeom, dustMat);
+        scene.add(dustParticles);
+
+        // ---- 动画循环 ----
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.016;
+            fireflyMat.uniforms.uTime.value = time;
+            dustMat.uniforms.uTime.value = time;
+            // 相机微微晃动
+            camera.position.x = Math.sin(time * 0.15) * 2;
+            camera.position.y = Math.cos(time * 0.12) * 1.5;
+            camera.lookAt(0, 0, 0);
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // ---- 响应窗口大小变化 ----
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    }
+
+
+    // ==================== 构建交互网格（场景感知） ====================
+    function buildGrid(sceneId) {
+        sceneId = sceneId || currentScene;
+        const config = SCENE_CONFIG[sceneId];
+        if (!config) { console.warn('未知场景:', sceneId); return; }
+        const data = config.data;
+
+        const gridOverlay = document.getElementById('gridOverlay');
+        gridOverlay.innerHTML = '';  // 清空旧网格
+
+        // 根据场景设置网格列数（自然元素5列/动物园6列）
+        gridOverlay.classList.remove('cols-6');
+        if (config.cols === 6) gridOverlay.classList.add('cols-6');
+
+        data.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'grid-item';
+            div.dataset.index = index;
+
+            // 点击事件：波纹效果 + 打开弹窗
+            div.addEventListener('click', (e) => {
+                createRipple(e, div);
+                setTimeout(() => openModal(item), 200);
+            });
+
+            // 3D 倾斜跟随鼠标
+            div.addEventListener('mousemove', (e) => {
+                const rect = div.getBoundingClientRect();
+                const x = e.clientX - rect.left - rect.width / 2;
+                const y = e.clientY - rect.top - rect.height / 2;
+                const tiltX = (y / rect.height) * -12;
+                const tiltY = (x / rect.width) * 12;
+                div.style.transform = `scale(1.08) translateZ(20px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
+            });
+
+            div.addEventListener('mouseleave', () => {
+                div.style.transform = '';
+            });
+
+            gridOverlay.appendChild(div);
+        });
+    }
+
+    // ==================== 场景切换 ====================
+    function switchScene(sceneId) {
+        if (sceneId === currentScene) return;  // 已在该场景，跳过
+        if (!SCENE_CONFIG[sceneId]) return;
+
+        // 先关闭可能打开的弹窗
+        closeModal();
+
+        const config = SCENE_CONFIG[sceneId];
+        currentScene = sceneId;
+
+        // 1. 更新标签栏激活状态
+        document.querySelectorAll('.scene-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.scene === sceneId);
+        });
+
+        // 2. 切换背景图
+        const bgImg = document.querySelector('.main-bg');
+        if (bgImg) bgImg.src = config.bgSrc;
+
+        // 3. 重建网格（自动使用正确的数据和列数）
+        buildGrid(sceneId);
+
+        // 4. 更新标题
+        const titleEl = document.querySelector('.title-decoration');
+        if (titleEl) titleEl.textContent = config.title;
+
+        // 4. 切换完成语音提示
+        speakAudio(`欢迎来到${config.title}！`);
+    }
+
+    // 创建点击波纹效果
+    function createRipple(e, element) {
+        const ripple = document.createElement('span');
+        ripple.className = 'ripple';
+        const rect = element.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        ripple.style.width = ripple.style.height = size + 'px';
+        ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+        ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+        element.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 600);
+    }
+
+    // ==================== 打开知识卡片弹窗 ====================
+    function openModal(data) {
+        const modal = document.getElementById('cardModal');
+        currentCard = data;
+
+        // 1. 左侧媒体（图片或视频）：按扩展名自动判断
+        //    图片 → background-image 等比覆盖填充；
+        //    视频 → 注入 <video> 全屏填充（autoplay/loop/muted/playsinline，移动端可自动播放），不做内嵌，仅外部引用。
+        const leftPanel = document.getElementById('modalImage');
+        const mediaSrc = data.image || '日.mp4';
+        const isVideoMedia = /\.(mp4|webm|ogg|mov|m4v)$/i.test(mediaSrc);
+        const existingVideo = leftPanel.querySelector('video.modal-media');
+        if (existingVideo) existingVideo.remove();
+        if (isVideoMedia) {
+            leftPanel.style.backgroundImage = 'none';
+            const mv = document.createElement('video');
+            mv.className = 'modal-media';
+            mv.src = mediaSrc;
+            mv.autoplay = true; mv.loop = true; mv.muted = true;
+            mv.setAttribute('playsinline', '');
+            mv.setAttribute('webkit-playsinline', '');
+            mv.setAttribute('preload', 'auto');
+            mv.style.cursor = 'pointer';
+            // 点击视频可暂停/继续播放（兼容“点击播放”需求；静音自动播放为主）
+            mv.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (mv.paused) { const pp = mv.play(); if (pp && pp.catch) pp.catch(() => {}); }
+                else mv.pause();
+            });
+            leftPanel.insertBefore(mv, leftPanel.firstChild);
+            // 部分浏览器需显式调用 play() 才能自动播放
+            const p = mv.play();
+            if (p && p.catch) p.catch(() => {});
+        } else {
+            leftPanel.style.backgroundImage = `url('${mediaSrc}')`;
+            leftPanel.style.backgroundPosition = 'center center';
+        }
+
+        // 读一读弹窗：根据图片主色 / 主题自动适配配色（背景透明，与左侧图片自然融合）
+        try { ReadPopupTheme.applyForImage(document.getElementById('readPopup'), data.image || '日.mp4', ReadPopupConfig); } catch(e){}
+
+        // 2. 左侧大字展示
+        document.getElementById('leftCharDisplay').textContent = data.char;
+        // 2.1 正面醒目核心字展示
+        document.getElementById('ui-core').textContent = data.char;
+
+        // 3. 渲染基础教学数据：拼音 / 单词拆为独立字母对象（点击喇叭后逐字母高亮）
+        renderPinyinLetters(document.getElementById('ui-pinyin'), data.pinyin);
+        document.getElementById('ui-words').textContent = "组词：" + data.words.join('、');
+        // 英语单词：拆为独立字母对象，展示在拼音下方
+        renderWordLetters(document.getElementById('ui-english'), data.english);
+
+        // 4. 渲染释义（小知识已整合进「读一读」弹窗，此处不再单独渲染）
+
+        // 5. 部首与字形三合一（部首 / 笔画 / 结构 融于同一加宽模块）
+        const radicalBox = document.getElementById('ui-radical-box');
+        const rRadical = radicalBox.querySelector('.struct-radical'); if (rRadical) rRadical.textContent = data.radical || '—';
+        const rStrokes = radicalBox.querySelector('.struct-strokes'); if (rStrokes) rStrokes.textContent = (data.strokes || 0) + ' 画';
+        const rType = radicalBox.querySelector('.struct-type'); if (rType) rType.textContent = data.structure || '—';
+
+        // 6. 渲染造句示例（造句已整合进「读一读」弹窗，此处不再单独渲染）
+
+        // 6.1 渲染笔画名称（按课标笔顺，含笔画类型）
+        const strokesBox = document.getElementById('ui-strokes');
+        strokesBox.querySelector('.stroke-num-total').textContent = (data.strokes || 0);
+        const strokeList = strokesBox.querySelector('.stroke-list');
+        strokeList.innerHTML = '';
+        (data.strokesName || []).forEach((nm, i) => {
+            const chip = document.createElement('div');
+            chip.className = 'stroke-chip';
+            chip.innerHTML = `<span class="stroke-num">${i + 1}</span><span class="stroke-name">${nm}</span><span class="stroke-type">${strokeType(nm)}</span>`;
+            strokeList.appendChild(chip);
+        });
+
+        // 7. 初始化田字格与 Hanzi Writer（笔顺引擎若未加载也绝不影响弹窗显示）
+        try {
+            if (typeof HanziWriter === 'undefined') {
+                console.warn('HanziWriter 未加载，跳过田字格渲染');
+            } else {
+                const tzgContainer = document.getElementById('tzg-container');
+                // 仅清空两个子层（保留 #tzg-base / #tzg-trace 容器本身），避免把描红目标节点删掉
+                const baseEl = document.getElementById('tzg-base');
+                const traceEl = document.getElementById('tzg-trace');
+                if (baseEl) baseEl.innerHTML = '';
+                if (traceEl) traceEl.innerHTML = '';
+                // 双层田字格：尺寸与容器一致（移动端 160 / 桌面 190）
+                const tzgSize = (window.innerWidth <= 600) ? 160 : 190;
+                traceCompleted = false;
+                traceQuizActive = false;
+                // 底层：黑色笔顺动画 / 字形参考
+                baseWriter = HanziWriter.create('tzg-base', data.char, {
+                    width: tzgSize, height: tzgSize, padding: 15,
+                    strokeColor: '#333333',      // 黑色笔划（笔顺动画 / 字形参考）
+                    // 独体字整体即部首，参考字保持黑色；合体字仅把部首高亮为红，符合“黑色笔顺动画/字形参考”设计
+                    radicalColor: (data.structure && data.structure.indexOf('独体') >= 0) ? '#333333' : '#ff6b6b',
+                    strokeWidth: TRACE_WIDTH,    // 与蓝色手写笔划同宽
+                    delayBetweenStrokes: 200,
+                    showOutline: true,
+                    outlineColor: '#d0d0d0'
+                });
+                // 上层：蓝色手写描红（完成笔画仍保持蓝色，且永不随动画被清除）
+                traceWriter = HanziWriter.create('tzg-trace', data.char, {
+                    width: tzgSize, height: tzgSize, padding: 15,
+                    strokeColor: '#1e88e5',      // 完成笔画保持蓝色
+                    drawingColor: '#1e88e5',     // 书写中笔迹蓝色
+                    strokeWidth: TRACE_WIDTH,    // 与黑色笔划同宽
+                    drawingWidth: TRACE_WIDTH,   // 与黑色笔划同宽
+                    showOutline: false,          // 不重复画轮廓，仅呈现用户蓝色笔迹
+                    showCharacter: false,        // 关键修复：默认不渲染蓝色字，蓝色仅在手动书写(quiz)时出现，不遮挡田字格
+                    outlineColor: '#d0d0d0'
+                });
+                // 8. 书写临摹测验及通关联动（自由书写保留蓝色轨迹）
+                enableQuiz(data);
+            }
+        } catch (e) {
+            console.warn('田字格初始化失败（不影响弹窗显示）：', e);
+        }
+
+        // 9. 绑定按钮动作（每个按钮独立，stopPropagation 防止事件冒泡干扰）
+        document.getElementById('btn-animate').onclick = (e) => {
+            e.stopPropagation();
+            playStrokeAnim(data);   // 笔顺动画：逐笔播放并同步高亮左侧笔画名称
+        };
+        document.getElementById('btn-audio').onclick = (e) => {
+            e.stopPropagation();
+            const rp = document.getElementById('readPopup');
+            if (rp.classList.contains('show')) {
+                closeReadPopup();   // 弹窗已打开：再次点击「读一读」关闭弹窗（与原关闭按钮共用 closeReadPopup，状态一致、互不冲突）
+            } else {
+                readAloud(data);    // 弹窗未打开：打开并语音朗读（保留原语音播放能力）
+            }
+        };
+        // 趣味问答按钮 → 打开游戏化测验（先中止进行中的描红/朗读）
+        document.getElementById('btn-quiz').onclick = (e) => {
+            e.stopPropagation();
+            ACTIVITY_TOKEN++;
+            startQuiz(data);
+        };
+
+        // 拼音 / 英语 小喇叭：点击后逐字母高亮（替代原弹窗交互），并保留语音朗读
+        document.getElementById('btnPinyin').onclick = (e) => { e.stopPropagation(); highlightPinyin(data); };
+        document.getElementById('btnEnglish').onclick = (e) => { e.stopPropagation(); highlightWord(data); };
+        // 描红讲解 / 描红练习（拆为两个独立按钮，均支持反复点击与反复练习）
+        document.getElementById('btn-trace-guide').onclick = (e) => {
+            e.stopPropagation();
+            ACTIVITY_TOKEN++;
+            hideTraceGuidePop();   // 改用讲解时收起描写引导弹窗
+            if (traceQuizActive) try { traceWriter.cancelQuiz(); } catch(ex){}
+            traceQuizActive = false;
+            traceGuide(data);
+        };
+        document.getElementById('btn-trace').onclick = (e) => {
+            e.stopPropagation();
+            ACTIVITY_TOKEN++;
+            // 取消进行中的描红测验，避免重复触发
+            if (traceQuizActive) try { traceWriter.cancelQuiz(); } catch(ex){}
+            traceQuizActive = false;
+            tracePractice(data);
+        };
+
+        // 10. 点击字头区域（拼音）也可触发读音，强化认读反馈
+        document.querySelector('.char-header').onclick = (e) => {
+            e.stopPropagation();
+            speakAudio(`${data.char}，${data.pinyin}`);
+        };
+
+        // 重置：隐藏趣味问答面板、读一读弹窗与拼读浮窗，复位顶部拖动
+        document.getElementById('quizBox').classList.remove('show');
+        closeReadPopup();                    // 重置：隐藏读一读弹窗并停止其自动滚动/跟随高亮
+        hideBlend(); blendType = null; clearLetterHL();
+        hideTraceGuidePop();                 // 收起描写引导弹窗
+        const tbReset = document.getElementById('topBlock');
+        if (tbReset) { tbReset.style.transform = ''; topDrag.x = 0; topDrag.y = 0; }
+        // 读一读 弹窗关闭按钮（独立绑定，stopPropagation 防冒泡）
+        document.getElementById('readPopupClose').onclick = (e) => {
+            e.stopPropagation();
+            closeReadPopup();
+        };
+        // 读一读 弹窗主题切换按钮 🎨（循环：auto→warm→cool→dark→light→auto）
+        document.getElementById('readPopupTheme').onclick = (e) => {
+            e.stopPropagation();
+            const order = ['auto','warm','cool','dark','light'];
+            const idx = (order.indexOf(ReadPopupConfig.theme) + 1) % order.length;
+            setReadPopupTheme(order[idx]);
+        };
+        // 描写引导弹窗「开始练习」按钮：关闭弹窗，宝宝即可点击田字格描红
+        document.getElementById('tgpStart').onclick = (e) => {
+            e.stopPropagation();
+            hideTraceGuidePop();
+        };
+
+        // 11. 重置翻转卡片到正面（每次打开都从正面开始）
+        const inner = document.getElementById('flipCardInner');
+        inner.classList.remove('flipped');
+        document.getElementById('flipBtn').textContent = '🔄 翻到背面 ✍️';
+
+        // 12. 显示弹窗并自动朗读
+        modal.classList.add('active');
+        setTimeout(() => {
+            const prefix = (SCENE_CONFIG[currentScene] || {}).speakPrefix || '自然元素';
+            speakAudio(`你发现了${prefix}——${data.char}，${data.pinyin}！`);
+        }, 700); // 等3D翻转动画完成后再朗读
+    }
+
+    // ==================== 关闭弹窗 ====================
+    function closeModal() {
+        const modal = document.getElementById('cardModal');
+        modal.classList.remove('active');
+        // 暂停左侧视频，避免弹窗关闭后仍后台播放消耗资源
+        const lp = document.getElementById('modalImage');
+        const v = lp && lp.querySelector('video.modal-media');
+        if (v) { try { v.pause(); } catch(e){} }
+        window.speechSynthesis.cancel();
+    }
+
+    // ==================== 翻转卡片（正面 <-> 背面） ====================
+    function flipCard() {
+        const inner = document.getElementById('flipCardInner');
+        const btn = document.getElementById('flipBtn');
+        const flipped = inner.classList.toggle('flipped');
+        btn.textContent = flipped ? '🔄 翻回正面 🏠' : '🔄 翻到背面 ✍️';
+        // 翻到背面时收起「读一读」面板（该阅读面板归属正面，避免与背面书写区视觉重叠）
+        if (flipped) closeReadPopup();
+    }
+
+    // 点击遮罩层也可关闭
+    document.getElementById('cardModal').addEventListener('click', (e) => {
+        if (e.target.id === 'cardModal') closeModal();
+    });
+
+    // ESC键关闭
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+    });
+
+    // ==================== TTS语音播报（优化版） ====================
+    let SPEECH_TOKEN = 0;     // 语音令牌：每次新朗读自增，旧回调据此放弃，杜绝叠加/抢拍
+    let ACTIVITY_TOKEN = 0;   // 活动令牌：用户点击新按钮时自增，正在进行的描红循环据此外退
+    async function speakAudio(text) {
+        const myToken = ++SPEECH_TOKEN;       // 占用令牌，取消此前所有语音
+        await ensureVoices();                 // 先确认中文语音已加载，避免退回英文默认音
+        const synth = window.speechSynthesis;
+        synth.cancel();                       // 先停掉正在播放的语音，避免叠加
+        await sleep(90);                      // 取消后稍候再播，规避 Chrome 竞态导致整句不出声
+        if (myToken !== SPEECH_TOKEN) return; // 已被新动作取代，放弃本次
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'zh-CN';
+        utterance.rate = 0.85;                // 语速稍慢，适合幼儿
+        utterance.pitch = 1.2;                // 音调稍高，亲切感
+        utterance.volume = 1.0;
+
+        // 选择标准中文（普通话）语音，排除港台繁体
+        const zhVoice = getVoice('zh-CN');
+        if (zhVoice) utterance.voice = zhVoice;
+
+        let fin = false;
+        const done = () => { if (fin) return; fin = true; };
+        utterance.onend = done; utterance.onerror = done;
+        synth.speak(utterance);
+    }
+
+    // 确保语音列表已加载
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = () => {};
+    }
+
+    // ==================== 拼音拼读（声母+韵母+声调，符合课标） ====================
+    const ZHYR = ['zhi','chi','shi','ri','zi','ci','si','yi','wu','yu','ye','yue','yuan','yin','yun','ying'];
+    const INITIALS = ['zh','ch','sh','b','p','m','f','d','t','n','l','g','k','h','j','q','x','r','z','c','s','y','w'];
+    // 声母呼读音：保证中文 TTS 读成「bo/po/mo…」而非英语字母音「bee/pee…」
+    const INITIAL_READ = {
+        'b':'bo','p':'po','m':'mo','f':'fo','d':'de','t':'te','n':'ne','l':'le',
+        'g':'ge','k':'ke','h':'he','j':'ji','q':'qi','x':'xi',
+        'zh':'zhi','ch':'chi','sh':'shi','r':'ri','z':'zi','c':'ci','s':'si',
+        'y':'yi','w':'wu'
+    };
+    // 声母呼读音对应汉字：朗读时不使用拉丁字母（避免被中文TTS读成英语字母音），
+    // 而用与呼读音同音的汉字（如 b→玻、x→西），保证语音读成正确音节。
+    const INITIAL_CHAR = {
+        'b':'玻','p':'坡','m':'摸','f':'佛','d':'得','t':'特','n':'讷','l':'勒',
+        'g':'哥','k':'科','h':'喝','j':'鸡','q':'欺','x':'西',
+        'zh':'知','ch':'吃','sh':'诗','r':'日','z':'资','c':'雌','s':'思',
+        'y':'衣','w':'屋'
+    };
+    // 韵母呼读音对应汉字（j/q/x/y 后的 u 实为 ü，已转换）。用于拼音拼读朗读，避免英文发音。
+    const FINAL_CHAR = {
+        'a':'啊','o':'喔','e':'鹅','er':'耳',
+        'ai':'爱','ei':'诶','ao':'奥','ou':'欧',
+        'an':'安','en':'恩','ang':'昂','eng':'鞥','ong':'轰',
+        'i':'衣','ia':'呀','ie':'耶','iao':'腰','iu':'忧','ian':'烟','in':'因','iang':'央','ing':'英','iong':'庸',
+        'u':'乌','ua':'哇','uo':'窝','uai':'歪','ui':'威','uan':'弯','un':'温','uang':'汪','ueng':'翁',
+        'v':'迂','ve':'约','van':'冤','vn':'晕'
+    };
+    const TONE_MAP = { 'ā':'a','á':'a','ǎ':'a','à':'a','ē':'e','é':'e','ě':'e','è':'e','ī':'i','í':'i','ǐ':'i','ì':'i','ō':'o','ó':'o','ǒ':'o','ò':'o','ū':'u','ú':'u','ǔ':'u','ù':'u','ǖ':'v','ǘ':'v','ǚ':'v','ǜ':'v','ü':'v' };
+    function stripTone(s){ return s.split('').map(c => TONE_MAP[c] || c).join(''); }
+    function getTone(s){ if(/[āēīōūǖ]/.test(s)) return 1; if(/[áéíóúǘ]/.test(s)) return 2; if(/[ǎěǐǒǔǚ]/.test(s)) return 3; if(/[àèìòùǜ]/.test(s)) return 4; return 0; }
+    function splitPinyin(base){
+        for (const ini of INITIALS) { if (base.startsWith(ini)) return [ini, base.slice(ini.length)]; }
+        return ['', base];
+    }
+    // 韵母呼读音（去声调，主元音用大写字母标记，便于后续定位加声调）。
+    // 给 i/u/ü 开头的韵母补 y/w 头，让中文 TTS 读成标准韵母音（如 ing→ying「英」、u→wu「乌」），
+    // 避免直接读裸字母被念成英语字母音（i-n-g）。
+    const FINAL_READ = {
+        'a':'A','o':'O','e':'E','er':'Er',
+        'ai':'Ai','ei':'Ei','ao':'Ao','ou':'Ou',
+        'an':'An','en':'En','ang':'Ang','eng':'Eng','ong':'Ong',
+        'i':'yI','ia':'yA','ie':'yE','iao':'yAo','iu':'yOu','ian':'yAn',
+        'in':'yIn','iang':'yAng','ing':'yIng','iong':'yOng',
+        'u':'wU','ua':'wA','uo':'wO','uai':'wAi','ui':'wEi','uan':'wAn',
+        'un':'wEn','uang':'wAng','ueng':'wEng',
+        'v':'yV','ve':'yuE','van':'yuAn','vn':'yVn'
+    };
+    const TONE_LETTERS = {
+        1:{a:'ā',o:'ō',e:'ē',i:'ī',u:'ū',v:'ǖ'},
+        2:{a:'á',o:'ó',e:'é',i:'í',u:'ú',v:'ǘ'},
+        3:{a:'ǎ',o:'ǒ',e:'ě',i:'ǐ',u:'ǔ',v:'ǚ'},
+        4:{a:'à',o:'ò',e:'è',i:'ì',u:'ù',v:'ǜ'}
+    };
+    // 韵母呼读音：将带调韵母转换为标准中文呼读音（含正确声调标注）
+    function finalCallRead(finToned, ini){
+        let base = stripTone(finToned);
+        // j/q/x/y 后的 u 实为 ü（如 xuě 的韵母 uě → üě）
+        if (['j','q','x','y'].indexOf(ini) >= 0 && base.charAt(0) === 'u') {
+            base = 'v' + base.slice(1);
+        }
+        const tone = getTone(finToned);
+        let call = FINAL_READ[base] || base;
+        if (tone >= 1 && tone <= 4) {
+            const m = call.match(/[A-Z]/);
+            if (m) {
+                const lower = m[0].toLowerCase();
+                const toned = (TONE_LETTERS[tone] || {})[lower] || lower;
+                call = call.replace(m[0], toned);
+            }
+        }
+        return call;
+    }
+
+    // ---------- 语音队列 + 高亮展示（拼音/英语通用） ----------
+    // 等待语音列表加载完成：首次 getVoices 可能为空，若直接朗读会退回系统默认（可能为英文）音，导致拼音被读成英文
+    function ensureVoices(){
+        return new Promise((resolve) => {
+            const synth = window.speechSynthesis;
+            const v = synth.getVoices();
+            if (v && v.length) return resolve(v);
+            let done = false;
+            const finish = () => { if (done) return; done = true; resolve(synth.getVoices()); };
+            if (typeof synth.onvoiceschanged !== 'undefined') {
+                synth.onvoiceschanged = finish;
+            }
+            setTimeout(finish, 1500); // 兜底，避免极端情况下一直挂起
+        });
+    }
+    // 选择中文/英文语音：排除港台繁体，兼容 cmn/Chinese/Mandarin 等标注，优先 zh-CN
+    function getVoice(lang){
+        const voices = window.speechSynthesis.getVoices() || [];
+        if (!voices.length) return null;
+        if (lang && lang.toLowerCase().startsWith('en')) {
+            return voices.find(v => /^en/i.test(v.lang || '')) || null;
+        }
+        const isZh = (v) => {
+            const L = (v.lang || '').toLowerCase();
+            if (L.includes('tw') || L.includes('hk') || L.includes('hant')) return false;
+            return L.startsWith('zh') || L.includes('cmn') || L.includes('chinese') || L.includes('mandarin');
+        };
+        return voices.find(v => isZh(v) && /^zh-cn/i.test(v.lang || ''))
+            || voices.find(isZh)
+            || null;
+    }
+    // 逐条朗读，朗读第 i 条前回调 onStart(i) 用于高亮。
+    // 采用 SPEECH_TOKEN 令牌：调用即占用新令牌并取消旧语音；旧回调因令牌不符而放弃，
+    // 避免不同朗读任务相互打断/叠加。watchdog 估值偏宽松，确保 onend 先触发再结束。
+    function speakQueue(items, lang, onStart, onFinish, onEnd){
+        return new Promise(async (resolve) => {
+            const myToken = ++SPEECH_TOKEN;
+            const synth = window.speechSynthesis;
+            await ensureVoices();            // 确保中文语音已就绪，避免退回英文默认音
+            const isEn = lang && lang.toLowerCase().startsWith('en');
+            const v = getVoice(lang);
+            for (let i = 0; i < items.length; i++) {
+                if (myToken !== SPEECH_TOKEN) { resolve(); return; } // 已被新动作取消
+                if (onStart) onStart(i);
+                await new Promise((res) => {
+                    const text = items[i];
+                    const u = new SpeechSynthesisUtterance(text);
+                    u.lang = lang || 'zh-CN';
+                    u.rate = isEn ? 0.8 : 0.82;
+                    u.pitch = isEn ? 1.0 : 1.15;
+                    u.volume = 1.0;
+                    if (v) u.voice = v;
+                    let fin = false; const done = () => { if (fin) return; fin = true; res(); };
+                    // onEnd：本句朗读结束后再触发（用于“读完再高亮”，保证高亮时机与读音一致）
+                    u.onend = () => { if (onEnd) onEnd(i); done(); };
+                    u.onerror = () => { if (onEnd) onEnd(i); done(); };
+                    u.onstart = () => { if (onStart) onStart(i); };   // 语音真正开始播放即触发高亮（与实际播放同步，消除原 onEnd 滞后）
+                    synth.speak(u);
+                    // 兜底超时：务必长于真实朗读时长，让 onend 始终先触发再结束，
+                    // 防止提前 resolve 导致弹窗提前收起/下一句抢拍（造成播报中断）
+                    const est = Math.max(3000, text.length * 480) + 3000;
+                    setTimeout(done, est);
+                });
+                if (myToken !== SPEECH_TOKEN) { resolve(); return; }
+                await sleep(180);            // 句间短停顿，确保连贯不抢拍
+            }
+            if (onFinish) onFinish();
+            resolve();
+        });
+    }
+    // 高亮展示区：渲染 chips 并控制当前朗读项高亮
+    function showBlend(title, steps){
+        document.getElementById('blendTitle').textContent = title;
+        const chips = document.getElementById('blendChips');
+        chips.innerHTML = '';
+        steps.forEach((s) => {
+            const d = document.createElement('div');
+            d.className = 'blend-chip';
+            d.innerHTML = `<span class="bc-label">${s.label}</span><span class="bc-val">${s.val}</span>`;
+            chips.appendChild(d);
+        });
+        document.getElementById('blendBar').classList.add('show');
+    }
+    function hlBlend(i){
+        const chips = document.getElementById('blendChips').children;
+        for (let k = 0; k < chips.length; k++) chips[k].classList.toggle('active', k === i);
+    }
+    function hideBlend(){ document.getElementById('blendBar').classList.remove('show'); }
+    // 喇叭按钮显隐切换：点同一喇叭再次点击则隐藏；点另一喇叭则切换内容并保持显示
+    function toggleBlend(type, data){
+        const bar = document.getElementById('blendBar');
+        if (blendType === type && bar.classList.contains('show')) {
+            hideBlend(); blendType = null; window.speechSynthesis.cancel(); return;
+        }
+        blendType = type;
+        if (type === 'pinyin') pinyinBlend(data); else englishPhonics(data);
+    }
+
+    // 拼音拼读：声母/韵母/全拼均用中文呼读音汉字朗读（如 西/英/威），彻底避免中文TTS
+    // 把拉丁拼音读成英语字母音。朗读内容全部为中文，芯片上仍展示拉丁拼音供幼儿认知。
+    async function pinyinBlend(pd){
+        ACTIVITY_TOKEN++; window.speechSynthesis.cancel();  // 用户主动触发：停掉旧语音与描红
+        const pinyin = pd.pinyin;
+        const char = pd.char;
+        const base = stripTone(pinyin);
+        const tone = getTone(pinyin);
+        const toneName = ['','第一声','第二声','第三声','第四声'][tone] || '轻声';
+        if (ZHYR.includes(base)) {
+            showBlend('🔤 整体认读', [{ label:'整体认读', val: pinyin }]);
+            await speakQueue(['整体认读音节。' + char + '。不用拼，直接读。' + char + '。'], 'zh-CN', (i) => hlBlend(i));
+            return;
+        }
+        const [ini, fin] = splitPinyin(base);
+        const iniChar = INITIAL_CHAR[ini] || ini;
+        let fbase = stripTone(fin);
+        if (['j','q','x','y'].indexOf(ini) >= 0 && fbase.charAt(0) === 'u') fbase = 'v' + fbase.slice(1);
+        const finChar = FINAL_CHAR[fbase] || fin;
+        const steps = [
+            { label: ini ? '声母' : '零声母', val: ini || '∅' },
+            { label:'韵母', val: fin },
+            { label:'声调', val: toneName },
+            { label:'全拼', val: pinyin }
+        ];
+        showBlend('🔤 拼音拼读', steps);
+        const reads = [];
+        if (ini) reads.push('声母。' + iniChar);
+        reads.push('韵母。' + finChar);
+        reads.push(toneName);
+        reads.push(iniChar + ' 和 ' + finChar + ' 拼成 ' + char + '。');
+        await speakQueue(reads, 'zh-CN', (i) => hlBlend(i));
+    }
+
+    // ==================== 英语自然拼读（字母音 + 单词，含高亮） ====================
+    // 英语本就该逐字母读，故保留拉丁字母；朗读完整后再收起弹窗。
+    async function englishPhonics(pd){
+        ACTIVITY_TOKEN++; window.speechSynthesis.cancel();
+        const word = pd.english;
+        const letters = word.split('');
+        const steps = letters.map((L, i) => ({ label:'第' + (i+1) + '个字母', val: L }));
+        steps.push({ label:'单词', val: word });
+        showBlend('🔡 英语拼读', steps);
+        const reads = letters.concat([word.toLowerCase()]);
+        await speakQueue(reads, 'en-US', (i) => hlBlend(i));
+    }
+
+    // ==================== 顶部字母拆分 + 逐字母高亮（替代原拼读弹窗） ====================
+    // 拼音声母/韵母、英文单词的字母 span 引用，供逐字母高亮使用
+    let pinyinIniSpans = [], pinyinFinSpans = [], wordLetterSpans = [];
+
+    // 保留声调的拼音拆分：声母为起始辅音（无调），韵母为剩余部分（保留声调标注）
+    function splitPinyinToned(py){
+        for (const ini of INITIALS) { if (py.startsWith(ini)) return [ini, py.slice(ini.length)]; }
+        return ['', py];
+    }
+    // 清除 #topBlock 内所有字母高亮
+    function clearLetterHL(){
+        const ls = document.querySelectorAll('#topBlock .letter.hl');
+        for (let k = 0; k < ls.length; k++) ls[k].classList.remove('hl');
+    }
+    // 将拼音拆为「声母组 + 韵母组」两组独立字母对象
+    function renderPinyinLetters(el, pinyin){
+        el.innerHTML = '';
+        pinyinIniSpans = []; pinyinFinSpans = [];
+        const [ini, fin] = splitPinyinToned(pinyin);
+        if (ini){
+            const g = document.createElement('span'); g.className = 'py-part shengmu';
+            for (const ch of ini){ const s = document.createElement('span'); s.className = 'letter'; s.textContent = ch; g.appendChild(s); pinyinIniSpans.push(s); }
+            el.appendChild(g);
+        }
+        const g2 = document.createElement('span'); g2.className = 'py-part yunmu';
+        for (const ch of fin){ const s = document.createElement('span'); s.className = 'letter'; s.textContent = ch; g2.appendChild(s); pinyinFinSpans.push(s); }
+        el.appendChild(g2);
+    }
+    // 将英文单词拆为逐字母独立对象
+    function renderWordLetters(el, word){
+        el.innerHTML = '';
+        wordLetterSpans = [];
+        for (const ch of word){
+            const s = document.createElement('span'); s.className = 'letter'; s.textContent = ch; el.appendChild(s); wordLetterSpans.push(s);
+        }
+    }
+
+    // 点击拼音喇叭：按「声母 → 韵母」顺序朗读，对应的拼音组在【语音开始播放的瞬间】即刻高亮
+    // （高亮与读音完全同步，无滞后）；全部音节读完后整体高亮所有拼音字母；朗读用中文呼读音，避免读成英语字母音。
+    // 速度由语音实际时长驱动（不再用固定短延时抢跑），整体节奏更舒缓、适合幼儿。
+    async function highlightPinyin(data){
+        const my = ++ACTIVITY_TOKEN;
+        window.speechSynthesis.cancel();
+        clearLetterHL();
+        const pinyin = data.pinyin;
+        const base = stripTone(pinyin);
+        const tone = getTone(pinyin);
+        const toneName = ['','第一声','第二声','第三声','第四声'][tone] || '轻声';
+        let reads = [];
+        // groupAfter：每句【开始播放时】应高亮的拼音组 —— 0=声母组，1=韵母组，null=本句不单独高亮
+        let groupAfter = [];
+        if (ZHYR.includes(base)){
+            reads = ['整体认读音节。' + data.char + '。不用拼，直接读。' + data.char + '。'];
+            groupAfter = [null];
+        } else {
+            const [ini, fin] = splitPinyin(base);
+            const iniChar = INITIAL_CHAR[ini] || ini;
+            let fbase = stripTone(fin);
+            if (['j','q','x','y'].indexOf(ini) >= 0 && fbase.charAt(0) === 'u') fbase = 'v' + fbase.slice(1);
+            const finChar = FINAL_CHAR[fbase] || fin;
+            if (ini) { reads.push('声母。' + iniChar); groupAfter.push(0); }
+            reads.push('韵母。' + finChar); groupAfter.push(1);
+            reads.push(toneName); groupAfter.push(null);
+            // 保留原有全部语音内容，仅省略声母与韵母之间的「和」字
+            reads.push(iniChar + ' ' + finChar + ' 拼成 ' + data.char + '。'); groupAfter.push(null);
+        }
+        const allSpans = pinyinIniSpans.concat(pinyinFinSpans);
+        // 高亮与语音播放同步：第 i 句【开始播放】即刻高亮其对应拼音组（无延迟）；全部读完整体高亮
+        await speakQueue(reads, 'zh-CN',
+            (i) => {                               // onStart：语音开始播放即高亮该组（与读音同步）
+                if (my !== ACTIVITY_TOKEN) return;
+                const g = groupAfter[i];
+                if (g === 0) for (const s of pinyinIniSpans) s.classList.add('hl');
+                else if (g === 1) for (const s of pinyinFinSpans) s.classList.add('hl');
+            },
+            () => {                                // onFinish：全部读完 → 整体高亮
+                if (my === ACTIVITY_TOKEN) for (const s of allSpans) s.classList.add('hl');
+            },
+            null
+        );
+    }
+
+    // 点击单词喇叭：逐字母朗读英文单词（读到哪字母，哪字母【开始播放】即高亮，高亮与读音完全同步、无滞后），
+    // 整个单词读完后再整体高亮所有字母。
+    async function highlightWord(data){
+        const my = ++ACTIVITY_TOKEN;
+        window.speechSynthesis.cancel();
+        clearLetterHL();
+        const word = data.english;
+        const letters = word.split('');
+        const reads = letters.concat([word.toLowerCase()]);   // 逐字母 + 末句整词
+        const spans = wordLetterSpans;
+        // 第 i 个字母开始播放即高亮该字母（与读音同步）；整词读完（onFinish）整体高亮所有字母
+        await speakQueue(reads, 'en-US',
+            (i) => {                               // onStart：第 i 个字母开始播放即高亮（与读音同步）
+                if (my !== ACTIVITY_TOKEN) return;
+                if (i < spans.length) spans[i].classList.add('hl');
+            },
+            () => {                                // onFinish：整词读完 → 整体高亮
+                if (my === ACTIVITY_TOKEN) for (const s of spans) s.classList.add('hl');
+            },
+            null
+        );
+    }
+
+    // ==================== 读一读 弹窗 · 配色 / 取色 / 滚动高亮 模块（职责分离） ====================
+    // 模块 A：可动态配置配色（支持外部传入 accent / 主题切换 theme；图片主色为 auto 默认）
+    const ReadPopupConfig = {
+        theme: 'auto',                  // 'auto'=跟随图片主色 | 'light' | 'dark' | 'warm' | 'cool'
+        accent: null,                   // 外部传入主色（hex/rgb 字符串），优先级高于 theme 与 auto
+        bgAlpha: 0,                     // 弹窗背景透明度（0 = 完全透明）
+        borderAlpha: 0.42,              // 边框/描边透明度
+        headAlpha: 0.85,                // 头部底色透明度
+        useImageAccentOnSections: false,// 是否把图片主色也应用到段落卡片（默认仅作用于边框/头部，保留分类色）
+        autoScroll: false,              // 内容区自动上下滚动（按需求关闭：滚动改由语音发音进度驱动，readAloud 不再自动启动漫游）
+        autoScrollSpeed: 0.28,          // 滚动速度 px/帧
+        scrollPauseOnHover: true,       // 悬停/手动滚动时暂停自动滚动
+        blur: 8                         // 背景轻微毛玻璃强度（不改变 background:transparent）
+    };
+    // 预设主题：theme 切换时使用的配色基线
+    const RP_THEMES = {
+        light: { accent:'#ff9f43', text:'#5a3a1a' },
+        dark:  { accent:'#ffd27f', text:'#fff5e6' },
+        warm:  { accent:'#ff7a45', text:'#5a2410' },
+        cool:  { accent:'#5b9bd5', text:'#0d2a44' }
+    };
+
+    // —— 颜色工具（纯函数） ——
+    function rpParseColor(str){
+        if (!str) return null;
+        str = String(str).trim();
+        if (str[0] === '#'){
+            let h = str.slice(1);
+            if (h.length === 3) h = h.split('').map(c=>c+c).join('');
+            if (h.length === 6) return { r:parseInt(h.slice(0,2),16), g:parseInt(h.slice(2,4),16), b:parseInt(h.slice(4,6),16) };
+        }
+        const m = str.match(/rgba?\(([^)]+)\)/);
+        if (m){ const p = m[1].split(',').map(s=>parseFloat(s)); return { r:p[0]||0, g:p[1]||0, b:p[2]||0 }; }
+        return null;
+    }
+    function rpRgbToCss(c, a){ return `rgba(${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)},${a==null?1:a})`; }
+    function rpLuminance(c){ return (0.299*c.r + 0.587*c.g + 0.114*c.b) / 255; }
+    // 提升主色可用性：保证一定饱和度与中等明度，避免过亮/过暗导致边框不可见
+    function rpBoost(c){
+        const max = Math.max(c.r,c.g,c.b), min = Math.min(c.r,c.g,c.b);
+        const s = max===0?0:(max-min)/max;
+        let L = rpLuminance(c), {r,g,b} = c;
+        if (s < 0.42){ const gray=(r+g+b)/3, k=0.42; r+= (r-gray)*k*2.2; g+=(g-gray)*k*2.2; b+=(b-gray)*k*2.2; }
+        if (L < 0.40){ const k=(0.40-L)/0.40*0.6; r+=(255-r)*k; g+=(255-g)*k; b+=(255-b)*k; }
+        if (L > 0.72){ const k=(L-0.72)/0.28*0.6; r*=(1-k); g*=(1-k); b*=(1-k); }
+        return { r:Math.max(0,Math.min(255,r)), g:Math.max(0,Math.min(255,g)), b:Math.max(0,Math.min(255,b)) };
+    }
+
+    // 模块 B：图片主色提取（纯取色，与弹窗渲染解耦）
+    // file:// 下 canvas 读取像素会被 taint → 自动退回 FALLBACK 色板，保证融合效果永不失效
+    const ImageColorExtractor = {
+        _cache: {},
+        // 各自然元素图片的兜底主体色（无法读取像素时使用）
+        FALLBACK: {
+            '日.mp4':{r:255,g:150,b:60}, '月.mp4':{r:150,g:170,b:220}, '星.mp4':{r:95,g:120,b:215},
+            '云.mp4':{r:150,g:175,b:210}, '风.mp4':{r:120,g:200,b:190}, '冰.mp4':{r:150,g:210,b:230},
+            '雨.mp4':{r:90,g:150,b:215}, '雪.mp4':{r:185,g:210,b:230}, '山.mp4':{r:110,g:165,b:110},
+            '石.mp4':{r:155,g:140,b:120}, '水.mp4':{r:80,g:160,b:215}, '火.mp4':{r:240,g:105,b:75},
+            '土.mp4':{r:185,g:135,b:90}, '地.mp4':{r:115,g:165,b:95}, '沙.mp4':{r:210,g:180,b:120},             '背景.png':{r:120,g:160,b:200},
+            '背景1.png':{r:120,g:160,b:200},
+            // 动物王国（资源位于项目根目录）视频兜底色：按文件名匹配，保证弹窗主色融合不回落默认橙
+            '鼠.mp4':{r:150,g:140,b:130}, '牛.mp4':{r:130,g:100,b:75}, '虎.mp4':{r:230,g:140,b:60},
+            '兔.mp4':{r:210,g:190,b:185}, '龙.mp4':{r:210,g:70,b:60},  '蛇.mp4':{r:120,g:170,b:110},
+            '马.mp4':{r:170,g:110,b:70},  '羊.mp4':{r:215,g:205,b:180}, '猴.mp4':{r:160,g:120,b:80},
+            '鸡.mp4':{r:225,g:120,b:60},  '狗.mp4':{r:170,g:140,b:100}, '猪.mp4':{r:225,g:160,b:160},
+            '猫.mp4':{r:150,g:150,b:155}, '象.mp4':{r:140,g:150,b:160}, '熊.mp4':{r:120,g:90,b:65},
+            '狮.mp4':{r:225,g:165,b:70},  '鸟.mp4':{r:110,g:160,b:210}, '鱼.mp4':{r:80,g:170,b:190}
+        },
+        _key(src){ try { return String(src).split('/').pop().split('?')[0]; } catch(e){ return src; } },
+        _fallback(src){ return this.FALLBACK[this._key(src)] || {r:255,g:159,b:67}; },
+        // 主导色算法：降采样 + 按饱和度加权，凸显彩色主体、抑制苍白背景的平均值
+        _dominant(data){
+            let r=0,g=0,b=0,wsum=0;
+            for (let i=0;i<data.length;i+=4){
+                if (data[i+3] < 125) continue;            // 跳过透明像素
+                const R=data[i],G=data[i+1],B=data[i+2];
+                const max=Math.max(R,G,B), min=Math.min(R,G,B);
+                const s = max===0?0:(max-min)/max;        // 饱和度
+                const L = (0.299*R+0.587*G+0.114*B)/255;  // 明度
+                let w = s*s + 0.04;                        // 偏向彩色像素
+                w *= (L>0.12 && L<0.92) ? 1 : 0.05;        // 抑制纯黑/纯白背景
+                r+=R*w; g+=G*w; b+=B*w; wsum+=w;
+            }
+            if (wsum < 1e-6) return null;
+            return rpBoost({ r:r/wsum, g:g/wsum, b:b/wsum });
+        },
+        extract(src){
+            const key = this._key(src);
+            if (this._cache[key]) return Promise.resolve(this._cache[key]);
+            // 视频无法用 Image 取像素，直接走兜底色板（避免发起注定失败的图片请求）
+            if (/\.(mp4|webm|ogg|mov|m4v)$/i.test(key)) {
+                const c = this._fallback(src); this._cache[key] = c; return Promise.resolve(c);
+            }
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                let done = false;
+                const fb = () => { const c = this._fallback(src); this._cache[key]=c; if(!done){done=true;resolve(c);} };
+                img.onload = () => {
+                    try {
+                        const W=24,H=24;
+                        const cv = document.createElement('canvas'); cv.width=W; cv.height=H;
+                        const cx = cv.getContext('2d');
+                        cx.drawImage(img,0,0,W,H);
+                        const d = cx.getImageData(0,0,W,H).data;   // file:// 下在此抛 SecurityError
+                        const col = this._dominant(d) || this._fallback(src);
+                        this._cache[key]=col; if(!done){done=true;resolve(col);}
+                    } catch(e){ fb(); }
+                };
+                img.onerror = fb;
+                img.src = src;
+                setTimeout(fb, 2500);   // 兜底超时（个别环境 onload/onerror 均不触发）
+            });
+        }
+    };
+
+    // 模块 C：弹窗主题应用（消费「颜色」→ 写入 CSS 变量；与取色模块解耦）
+    const ReadPopupTheme = {
+        last: null,
+        async applyForImage(popupEl, imageSrc, cfg){
+            let accent = cfg.accent ? rpParseColor(cfg.accent) : null;
+            if (!accent && cfg.theme && cfg.theme!=='auto' && RP_THEMES[cfg.theme]) accent = rpParseColor(RP_THEMES[cfg.theme].accent);
+            if (!accent) accent = await ImageColorExtractor.extract(imageSrc);   // 自动提取图片主色
+            accent = rpBoost(accent);
+            const text = rpLuminance(accent) > 0.6 ? '#3a2613' : '#fff6ea';
+            const vars = {
+                '--rp-accent': rpRgbToCss(accent,1),
+                '--rp-accent-border': rpRgbToCss(accent, cfg.borderAlpha),
+                '--rp-text': text,
+                '--rp-head-bg': rpRgbToCss(accent, cfg.headAlpha),
+                '--rp-focus-bg': rpRgbToCss(accent, 0.30),
+                '--rp-bg': 'transparent'
+            };
+            this.apply(popupEl, vars);
+            this.last = { accent, text, vars };
+            return vars;
+        },
+        apply(popupEl, vars){ for (const k in vars) popupEl.style.setProperty(k, vars[k]); }
+    };
+
+    // 模块 D：内容区自动上下滚动（rAF 平滑、到顶/底回弹；悬停/手动滚动暂停）
+    const ReadPopupScroller = {
+        el:null, raf:0, dir:1, hovering:false, idleUntil:0, cfg:null,
+        start(el, cfg){
+            this.stop();
+            this.el = el; this.cfg = cfg; this.dir = 1; this.hovering = false; this.idleUntil = 0;
+            if (cfg.scrollPauseOnHover){
+                el.addEventListener('mouseenter', this._enter);
+                el.addEventListener('mouseleave', this._leave);
+                el.addEventListener('wheel', this._touch, {passive:true});
+                el.addEventListener('touchmove', this._touch, {passive:true});
+            }
+            const loop = () => {
+                if (!this.el) return;
+                const max = this.el.scrollHeight - this.el.clientHeight;
+                if (max > 6 && !this.hovering && Date.now() > this.idleUntil){
+                    this.el.scrollTop += this.dir * (this.cfg.autoScrollSpeed||0.28);
+                    if (this.el.scrollTop >= max){ this.el.scrollTop = max; this.dir = -1; }
+                    else if (this.el.scrollTop <= 0){ this.el.scrollTop = 0; this.dir = 1; }
+                }
+                this.raf = requestAnimationFrame(loop);
+            };
+            this.raf = requestAnimationFrame(loop);
+        },
+        _enter(){ ReadPopupScroller.hovering = true; },
+        _leave(){ ReadPopupScroller.hovering = false; },
+        _touch(){ ReadPopupScroller.idleUntil = Date.now() + 2600; },
+        stop(){
+            if (this.raf) cancelAnimationFrame(this.raf);
+            if (this.el){
+                this.el.removeEventListener('mouseenter', this._enter);
+                this.el.removeEventListener('mouseleave', this._leave);
+                this.el.removeEventListener('wheel', this._touch);
+                this.el.removeEventListener('touchmove', this._touch);
+            }
+            this.raf = 0; this.el = null;
+        }
+    };
+
+    // 模块 E：滚动跟随高亮（段落滚动到视口中心时高亮，其余保持默认）
+    const ReadPopupFocus = {
+        el:null, sections:[], onScroll:null,
+        init(el){
+            this.stop();
+            this.el = el;
+            this.sections = Array.from(el.querySelectorAll('.rp-section'));
+            this.onScroll = () => this._update();
+            el.addEventListener('scroll', this.onScroll, {passive:true});
+            this._update();
+        },
+        _update(){
+            if (!this.sections.length || !this.el) return;
+            const r = this.el.getBoundingClientRect();
+            const center = r.top + r.height/2;
+            let best=null, bestD=Infinity;
+            for (const s of this.sections){
+                const sr = s.getBoundingClientRect();
+                const c = sr.top + sr.height/2;
+                const d = Math.abs(c - center);
+                if (d < bestD){ bestD = d; best = s; }
+            }
+            for (const s of this.sections) s.classList.toggle('rp-scrollfocus', s === best);
+        },
+        stop(){
+            if (this.el && this.onScroll) this.el.removeEventListener('scroll', this.onScroll);
+            this.sections = []; this.el = null; this.onScroll = null;
+        }
+    };
+
+    // 对外 API：主题切换 / 外部传入主色（运行时调用，立即重算并应用到当前弹窗）
+    function setReadPopupTheme(name){
+        ReadPopupConfig.theme = name;
+        ReadPopupConfig.accent = null;
+        const popup = document.getElementById('readPopup');
+        const img = (typeof currentCard !== 'undefined' && currentCard && currentCard.image) || '日.mp4';
+        if (popup) ReadPopupTheme.applyForImage(popup, img, ReadPopupConfig);
+    }
+    function setReadPopupAccent(hex){
+        ReadPopupConfig.accent = hex || null;
+        ReadPopupConfig.theme = 'auto';
+        const popup = document.getElementById('readPopup');
+        const img = (typeof currentCard !== 'undefined' && currentCard && currentCard.image) || '日.mp4';
+        if (popup) ReadPopupTheme.applyForImage(popup, img, ReadPopupConfig);
+    }
+    window.ReadPopupConfig = ReadPopupConfig;
+    window.setReadPopupTheme = setReadPopupTheme;
+    window.setReadPopupAccent = setReadPopupAccent;
+
+    // ==================== 读一读 弹窗（小知识 / 组词 / 造句示例 + 同步朗读高亮） ====================
+    // 点击「读一读」弹出阅读窗，整合 小知识 / 组词 / 造句示例，并逐段语音朗读、同步高亮当前段落。
+    function closeReadPopup(){
+        const p = document.getElementById('readPopup');
+        if (p) p.classList.remove('show');
+        ReadPopupScroller.stop();   // 停止自动滚动
+        ReadPopupFocus.stop();      // 停止滚动跟随高亮
+        window.speechSynthesis.cancel();
+    }
+
+    // 滚动定位：将弹窗内第 idx 个段落平滑居中到可视区（由语音发音进度调用，实现“读到哪句滚到哪句”）
+    function scrollReadPopupToSection(idx){
+        const popup = document.getElementById('readPopup');
+        if (!popup) return;
+        const sec = popup.querySelectorAll('.rp-section')[idx];
+        if (!sec) return;
+        const cr = popup.getBoundingClientRect();
+        const ir = sec.getBoundingClientRect();
+        const target = popup.scrollTop + (ir.top - cr.top) - (cr.height - ir.height) / 2;
+        const t = Math.max(0, Math.min(target, popup.scrollHeight - popup.clientHeight));
+        if (popup.scrollTo) popup.scrollTo({ top: t, behavior: 'smooth' });
+        else popup.scrollTop = t;
+    }
+
+    function readAloud(data){
+        ACTIVITY_TOKEN++; window.speechSynthesis.cancel();   // 用户主动触发：停掉旧语音与描红
+        hideBlend(); blendType = null; clearLetterHL();   // 打开读一读时收起拼读浮窗并清除字母高亮，避免视觉重叠
+        const body = document.getElementById('readPopupBody');
+        body.innerHTML = '';
+        const sections = [
+            { cls:'rp-know', label:'📖 小知识',      text: (data.meaning || ''),                          read: (data.meaning || '') },
+            { cls:'rp-word', label:'🔤 组词',        text: '组词：' + (data.words || []).join('、'),        read: '组词：' + (data.words || []).join('，') },
+            { cls:'rp-sent', label:'✍️ 造句示例',    text: (data.sentence || ''),                          read: (data.sentence || '') }
+        ];
+        sections.forEach((s) => {
+            const d = document.createElement('div');
+            d.className = 'rp-section ' + s.cls;
+            d.innerHTML = `<div class="rp-label">${s.label}</div><div class="rp-text">${s.text}</div>`;
+            body.appendChild(d);
+        });
+        const popupEl = document.getElementById('readPopup');
+        popupEl.classList.add('show');
+        // 滚动跟随高亮：仅监听「手动滚动」以定位居中段落；滚动动作本身已由语音发音进度驱动，不再自动漫游
+        ReadPopupFocus.init(popupEl);
+        const reads = sections.map(s => s.read);
+        speakQueue(reads, 'zh-CN',
+            (i) => {                                   // 朗读第 i 段前：高亮该段，并平滑滚动定位到该段（语音读到哪句，就滚动到哪句）
+                for (let k = 0; k < body.children.length; k++) body.children[k].classList.toggle('active', k === i);
+                scrollReadPopupToSection(i);
+            },
+            () => {                                     // 全部读完：取消语音高亮，保留内容供回顾
+                for (let k = 0; k < body.children.length; k++) body.children[k].classList.remove('active');
+            }
+        );
+    }
+
+    // ==================== 笔画类型判定 + 左侧笔画名称高亮 ====================
+    // 笔画类型：含 折/钩/弯/斜/卧 等折笔特征者归为「折画（复合笔画）」，其余归为「基本笔画」。
+    function strokeType(name){
+        if (/[折钩弯斜卧]/.test(name)) return '折画';
+        return '基本';
+    }
+    // 高亮 / 取消高亮 背面笔画名称列表中第 i 笔（笔顺动画 / 描红 / 重播 同步）
+    function hlStroke(i){
+        const list = document.querySelector('#ui-strokes .stroke-list');
+        if (!list) return;
+        const chips = list.children;
+        for (let k = 0; k < chips.length; k++) chips[k].classList.toggle('active', k === i);
+        // 讲到 / 写到哪一笔，就平滑滚动到对应笔画位置（仅在点击按钮读取/书写时触发，无空闲自动滚动）
+        const sc = document.getElementById('ui-strokes');   // 即 .strokes-side 滚动容器
+        const chip = chips[i];
+        if (sc && chip){
+            const cr = sc.getBoundingClientRect();
+            const ir = chip.getBoundingClientRect();
+            const target = sc.scrollTop + (ir.top - cr.top) - (sc.clientHeight - ir.height) / 2;
+            const t = Math.max(0, Math.min(target, sc.scrollHeight - sc.clientHeight));
+            if (sc.scrollTo) sc.scrollTo({ top: t, behavior: 'smooth' });
+            else sc.scrollTop = t;
+        }
+    }
+    function clearStrokeHL(){
+        const list = document.querySelector('#ui-strokes .stroke-list');
+        if (!list) return;
+        const chips = list.children;
+        for (let k = 0; k < chips.length; k++) chips[k].classList.remove('active');
+    }
+
+    // ==================== 描写引导弹窗（无空闲自动滚动，仅点击按钮读取/书写时滚动定位） ====================
+
+    // 描写练习引导弹窗：弹出鼓励性提示语，直接引导宝宝动手练习（不做讲解）
+    function showTraceGuidePop(data, total){
+        const pop = document.getElementById('traceGuidePop');
+        const txt = document.getElementById('tgpText');
+        if (!pop || !txt) return;
+        txt.innerHTML = `宝宝真棒呀！🌟<br>我们一起来描一描「<b>${data.char}</b>」字吧～<br>它一共有 <b>${total}</b> 笔，一笔一笔慢慢写，<br>写对了我给你撒花花、发徽章哦！<br>加油，你一定可以的！💪`;
+        pop.classList.add('show');
+    }
+    function hideTraceGuidePop(){
+        const pop = document.getElementById('traceGuidePop');
+        if (pop) pop.classList.remove('show');
+    }
+
+    // ==================== 笔顺动画（逐笔播放 + 同步高亮） ====================
+    // 替代原 animateCharacter 整体动画：逐笔演示黑色笔顺，并同步高亮左侧对应笔画名称。
+    async function playStrokeAnim(data){
+        const myAct = ++ACTIVITY_TOKEN;
+        window.speechSynthesis.cancel();
+        resetTraceWriter(data);   // 清掉蓝色笔迹，确保黑色笔顺动画清晰可见
+        if (!baseWriter) return;
+        if (traceQuizActive) try { traceWriter.cancelQuiz(); } catch(ex){}
+        traceQuizActive = false;
+        const total = data.strokes || (data.strokesName || []).length || 0;
+        try { baseWriter.showCharacter(); } catch(e){}
+        await sleep(150); if (myAct !== ACTIVITY_TOKEN) return;
+        for (let i = 0; i < total; i++) {
+            if (myAct !== ACTIVITY_TOKEN) return;
+            hlStroke(i);
+            try { baseWriter.animateStroke(i, { duration: 600 }); } catch(e){}
+            await sleep(680);
+        }
+        clearStrokeHL();
+        if (myAct !== ACTIVITY_TOKEN) return;
+        speakAudio(`这是「${data.char}」字的笔顺`);
+    }
+
+    // ==================== 手动描红练习（带语音笔顺提示，可反复） ====================
+    function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+    // 自由书写（临摹测验）：用户在蓝色层描红，笔迹（drawingColor 蓝色）持久保留，不被任何动画清除
+    function enableQuiz(data){
+        const tzg = document.getElementById('tzg-trace');
+        tzg.onclick = () => {
+            if (traceCompleted) return;   // 已写完：保留蓝迹，不再重置/清除
+            if (traceQuizActive) return;  // 进行中：不重复开启
+            hideTraceGuidePop();          // 宝宝开始动笔，收起鼓励引导弹窗
+            try {
+                traceQuizActive = true;
+                traceWriter.quiz({
+                    // 写到第几笔，就高亮并滚动到对应笔画位置（与讲解同步）
+                    onCorrectStroke: (sd) => { if (sd && typeof sd.strokeNum === 'number') hlStroke(sd.strokeNum); },
+                    // 书写不正确或顺序有误：高亮当前笔并语音温柔提醒（节流，避免连续误触反复播报）
+                    onMistake: (sd) => {
+                        if (sd && typeof sd.strokeNum === 'number') hlStroke(sd.strokeNum);
+                        const now = Date.now();
+                        if (now - lastMistakeSpeak > 1800) {
+                            lastMistakeSpeak = now;
+                            speakAudio('嗯~ 这一笔好像不太对哦，宝宝别急，我们按笔顺从第一笔开始写就好啦～');
+                        }
+                    },
+                    onComplete: () => {
+                        // 写对后保留用户蓝色笔迹，不重新初始化/清除田字格
+                        traceCompleted = true;
+                        traceQuizActive = false;
+                        speakAudio(`太棒了！你写对了「${data.char}」字！真厉害！`);
+                        triggerConfetti();
+                        showRandomBadge();
+                    }
+                });
+            } catch(e){ traceQuizActive = false; }
+        };
+    }
+    // 描红练习（带语音笔顺提示，可反复）：每笔语音完整播完再演示，写对后保留蓝色轨迹。
+    // ACTIVITY_TOKEN：用户点击其它按钮时自增，本循环据此在每笔之间安全退出，互不干扰。
+    // 描写练习：点击后弹出鼓励性引导提示，不讲解、不自动演示，直接引导宝宝动手描红。
+    // 保留灰色虚线引导轮廓，宝宝可立即点击田字格开始自由书写（蓝迹持久保留）。
+    async function tracePractice(data){
+        const myAct = ++ACTIVITY_TOKEN;       // 占用活动令牌，取消任何进行中的描红/朗读
+        window.speechSynthesis.cancel();
+        resetTraceWriter(data);   // 清掉旧蓝色笔迹，支持反复练习
+        const names = data.strokesName || [];
+        const total = data.strokes || names.length || 0;
+        if (myAct !== ACTIVITY_TOKEN) return;
+        // 显示鼓励性引导弹窗（含鼓励语言），直接引导宝宝练习，不做逐笔讲解
+        showTraceGuidePop(data, total);
+        // 保留灰色虚线引导轮廓，方便宝宝对照着写；不自动演示笔顺
+        try { baseWriter.showOutline(); baseWriter.hideCharacter(); } catch(e){}
+        enableQuiz(data);   // 直接开启自由书写，宝宝可立即描红
+        // 轻声给一句鼓励（非逐笔讲解过程）
+        if (myAct === ACTIVITY_TOKEN) speakAudio(`宝宝真棒！来描一描「${data.char}」字吧～ 一共${total}笔，慢慢写，你可以的，加油！`);
+    }
+
+    // 重置蓝色手写层（清除旧蓝色笔迹、重建 traceWriter，支持反复练习）
+    function resetTraceWriter(data){
+        const traceEl = document.getElementById('tzg-trace');
+        if (traceEl) traceEl.innerHTML = '';
+        const tzgSize = (window.innerWidth <= 600) ? 160 : 190;
+        try {
+            traceWriter = HanziWriter.create('tzg-trace', data.char, {
+                width: tzgSize, height: tzgSize, padding: 15,
+                strokeColor: '#1e88e5', drawingColor: '#1e88e5',
+                strokeWidth: TRACE_WIDTH, drawingWidth: TRACE_WIDTH,
+                showOutline: false, showCharacter: false, outlineColor: '#d0d0d0'
+            });
+        } catch(e){}
+        traceCompleted = false; traceQuizActive = false;
+    }
+    // 描红讲解（仅语音 + 逐笔演示，不开自由书写；可反复点击）
+    async function traceGuide(data){
+        const myAct = ++ACTIVITY_TOKEN;
+        window.speechSynthesis.cancel();
+        const names = data.strokesName || [];
+        const total = data.strokes || names.length || 0;
+        resetTraceWriter(data);   // 清掉旧蓝色笔迹，保证讲解画面干净
+        try { baseWriter.hideCharacter(); } catch(e){}
+        await sleep(300);
+        if (myAct !== ACTIVITY_TOKEN) return;
+        await speakQueue(['现在讲解「' + data.char + '」字的写法，一共' + total + '笔，跟我一笔一笔看。']);
+        for (let i = 0; i < total; i++) {
+            if (myAct !== ACTIVITY_TOKEN) return;
+            const name = names[i] || ('第' + (i+1) + '笔');
+            hlStroke(i);   // 同步高亮左侧当前笔画名称
+            await speakQueue(['第' + (i+1) + '笔，' + name + '。'], 'zh-CN');
+            if (myAct !== ACTIVITY_TOKEN) return;
+            try { baseWriter.animateStroke(i, { duration: 800 }); } catch(e){}
+            await sleep(850);
+        }
+        clearStrokeHL();
+        if (myAct !== ACTIVITY_TOKEN) return;
+        await speakQueue(['「' + data.char + '」字讲解完了，点「描红练习」用蓝笔描一描吧！']);
+        try { baseWriter.showOutline(); } catch(e){}
+        enableQuiz(data);
+    }
+
+    // ==================== 撒花庆祝特效 ====================
+    function triggerConfetti() {
+        if (typeof confetti === 'undefined') return;  // 离线 / CDN 未加载时静默跳过，不影响主流程
+        const duration = 2.8 * 1000;
+        const animationEnd = Date.now() + duration;
+        const defaults = {
+            startVelocity: 30,
+            spread: 360,
+            ticks: 60,
+            zIndex: 9999,
+            colors: ['#ffd54f', '#ff6b6b', '#4da8da', '#66bb6a', '#ab47bc', '#ff9f43']
+        };
+
+        function randomInRange(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        const interval = setInterval(function() {
+            const timeLeft = animationEnd - Date.now();
+            if (timeLeft <= 0) return clearInterval(interval);
+
+            const particleCount = 50 * (timeLeft / duration);
+            confetti(Object.assign({}, defaults, {
+                particleCount,
+                origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+            }));
+            confetti(Object.assign({}, defaults, {
+                particleCount,
+                origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+            }));
+        }, 250);
+    }
+
+    // ==================== 随机掉落奖励徽章 ====================
+    function showRandomBadge() {
+        const badge = document.getElementById('badge-reward');
+        const iconDiv = badge.querySelector('.badge-icon');
+        const textDiv = badge.querySelector('.badge-text');
+
+        const randomReward = rewardLibrary[Math.floor(Math.random() * rewardLibrary.length)];
+        iconDiv.innerText = randomReward.icon;
+        textDiv.innerText = randomReward.text;
+
+        // 重置动画状态触发重新播放
+        badge.classList.remove('show-badge');
+        void badge.offsetWidth; // 强制reflow
+        badge.classList.add('show-badge');
+    }
+
+    // ==================== 趣味问答（游戏化测验） ====================
+    // 题型：为当前汉字选出正确的拼音（四选一）
+    function startQuiz(data) {
+        const box = document.getElementById('quizBox');
+        const qEl = document.getElementById('quizQuestion');
+        const optEl = document.getElementById('quizOptions');
+        const fbEl = document.getElementById('quizFeedback');
+
+        fbEl.textContent = '';
+        fbEl.className = 'quiz-feedback';
+
+        qEl.innerHTML = `请为汉字 <b style="font-size:1.5em;color:#d81b60;padding:0 4px;">${data.char}</b> 选择正确的拼音：`;
+
+        // 从当前场景其余汉字中抽取3个不重复的干扰拼音
+        const currentData = (SCENE_CONFIG[currentScene] || {}).data || literacyData;
+        const others = currentData
+            .filter(d => d.char !== data.char && d.pinyin !== data.pinyin)
+            .map(d => d.pinyin);
+        shuffle(others);
+        const distractors = others.slice(0, 3);
+        const options = shuffle([data.pinyin, ...distractors]);
+
+        optEl.innerHTML = '';
+        options.forEach(opt => {
+            const btn = document.createElement('div');
+            btn.className = 'quiz-option';
+            btn.textContent = opt;
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                // 锁定选项，防止重复点击
+                optEl.querySelectorAll('.quiz-option').forEach(b => b.onclick = null);
+                if (opt === data.pinyin) {
+                    btn.classList.add('correct');
+                    fbEl.textContent = '🎉 答对啦！你真棒！';
+                    fbEl.className = 'quiz-feedback ok';
+                    speakAudio(`答对啦！${data.char}的拼音是${data.pinyin}，你真聪明！`);
+                    triggerConfetti();
+                    showRandomBadge();
+                } else {
+                    btn.classList.add('wrong');
+                    fbEl.textContent = '💡 再想想哦，点「听一听」找答案~';
+                    fbEl.className = 'quiz-feedback no';
+                    speakAudio(`${data.char}的拼音是${data.pinyin}，我们再来一次！`);
+                }
+            };
+            optEl.appendChild(btn);
+        });
+
+        box.classList.add('show');
+    }
+
+    // Fisher–Yates 洗牌
+    function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+    }
+
+    // 收起趣味问答面板
+    document.getElementById('quizClose').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('quizBox').classList.remove('show');
+    });
+    </script>
+
+    <!-- Three.js（3D背景，纯装饰，非核心功能）。使用 async 加载，绝不阻塞页面与 DOMContentLoaded；
+         即使 CDN 慢/失败，主界面与交互照常可用，背景回退为纯色渐变。 -->
+    <script async src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"
+            onload="try{ if(typeof initThreeBackground==='function') initThreeBackground(); }catch(e){ console.warn('3D背景初始化失败（不影响主功能）:', e); }"></script>
+</body>
+</html>
