@@ -1213,7 +1213,7 @@
         // 第三排：更多动物朋友
         { id: "mao",  char: "猫", pinyin: "māo",  english: "CAT",       words: ["小猫", "花猫"], meaning: "猫眼睛亮亮的，晚上也能看清东西，最喜欢捉老鼠和睡懒觉。", radical: "犭", strokes: 11, structure: "左右结构", sentence: "小花猫趴在窗台上晒太阳。", strokesName: ["撇","撇","竖","撇","横","撇","竖弯钩","横","撇","撇","横"], image: "猫.mp4", col: 0, row: 2 },
         { id: "xiang",char: "象",pinyin: "xiàng",english: "ELEPHANT",  words: ["大象", "象牙"], meaning: "象是世界上最大的陆地动物，长长的鼻子能卷起很重的东西。", radical: "⺤", strokes: 11, structure: "独体字", sentence: "大象用长长的鼻子喷水洗澡。", strokesName: ["撇","横撇","竖","横折","横","撇","弯钩","撇","撇","撇","捺"], image: "象.mp4", col: 1, row: 2 },
-        { id: "xiong",char: "熊",pinyin: "xióng",english: "BEAR",      words: ["黑熊", "熊猫"], meaning: "熊力气很大，冬天要冬眠，喜欢吃蜂蜜和鱼。", radical: "灬", strokes: 14, structure: "上下结构", sentence: "大熊在森林里寻找蜂蜜吃。", strokesName: ["撇折","点","竖","横折钩","横","横","撇","竖弯钩","撇","竖弯钩","点","点","点","点"], image: "狮.jpg", col: 2, row: 2 },
+        { id: "xiong",char: "熊",pinyin: "xióng",english: "BEAR",      words: ["黑熊", "熊猫"], meaning: "熊力气很大，冬天要冬眠，喜欢吃蜂蜜和鱼。", radical: "灬", strokes: 14, structure: "上下结构", sentence: "大熊在森林里寻找蜂蜜吃。", strokesName: ["撇折","点","竖","横折钩","横","横","撇","竖弯钩","撇","竖弯钩","点","点","点","点"], image: "熊.mp4", col: 2, row: 2 },
         { id: "shi2", char: "狮",pinyin: "shī",  english: "LION",      words: ["狮子", "雄狮"], meaning: "狮是草原之王，雄狮有威风凛凛的鬃毛，吼声能传很远。", radical: "犭", strokes: 9,  structure: "左右结构", sentence: "雄狮站在岩石上守护着它的领地。", strokesName: ["撇","弯钩","撇","竖","撇","横","竖","横折钩","竖"], image: "狮.mp4", col: 3, row: 2 },
         { id: "niao", char: "鸟",pinyin: "niǎo",  english: "BIRD",      words: ["小鸟", "飞鸟"], meaning: "鸟有羽毛和翅膀，能在天空中自由飞翔，唱出动听的歌。", radical: "鸟", strokes: 5,  structure: "独体字", sentence: "小鸟在树枝上叽叽喳喳地唱歌。", strokesName: ["撇","横折钩","点","竖折折钩","横"], image: "鸟.mp4", col: 4, row: 2 },
         { id: "yu2",  char: "鱼",pinyin: "yú",   english: "FISH",       words: ["小鱼", "金鱼"], meaning: "鱼生活在水里，用鳃呼吸，用鳍游泳，摆动尾巴前进。", radical: "鱼", strokes: 8,  structure: "独体字", sentence: "小鱼在清澈的河水里游来游去。", strokesName: ["撇","横撇","竖","横折","横","竖","横","横"], image: "鱼.mp4", col: 5, row: 2 }
@@ -1561,21 +1561,20 @@
             const mv = document.createElement('video');
             mv.className = 'modal-media';
             mv.src = mediaSrc;
-            mv.autoplay = true; mv.loop = true; mv.muted = true;
             mv.setAttribute('playsinline', '');
             mv.setAttribute('webkit-playsinline', '');
-            mv.setAttribute('preload', 'auto');
             mv.style.cursor = 'pointer';
-            // 点击视频可暂停/继续播放（兼容“点击播放”需求；静音自动播放为主）
+            mv.autoplay = true; mv.loop = true; mv.muted = true;
+            mv.setAttribute('preload', 'auto');
+            // 点击视频可暂停/继续播放（静音自动播放为主）
             mv.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (mv.paused) { const pp = mv.play(); if (pp && pp.catch) pp.catch(() => {}); }
                 else mv.pause();
             });
-            leftPanel.insertBefore(mv, leftPanel.firstChild);
-            // 部分浏览器需显式调用 play() 才能自动播放
             const p = mv.play();
             if (p && p.catch) p.catch(() => {});
+            leftPanel.insertBefore(mv, leftPanel.firstChild);
         } else {
             leftPanel.style.backgroundImage = `url('${mediaSrc}')`;
             leftPanel.style.backgroundPosition = 'center center';
