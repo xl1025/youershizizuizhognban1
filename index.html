@@ -288,7 +288,7 @@
         .flip-face {
             position: absolute; inset: 0;
             -webkit-backface-visibility: hidden; backface-visibility: hidden;
-            overflow-y: auto;
+            overflow-x: hidden; overflow-y: auto;   /* 横向绝不溢出弹窗边界 */
             padding: 70px 30px 64px;
             display: flex; flex-direction: column; align-items: center;
             /* 美化滚动条 */
@@ -373,9 +373,9 @@
         /* 田字格测验区（双层：底层黑色笔顺动画 + 上层蓝色手写描红，蓝迹持久不被清除） */
         #tzg-container {
             position: relative;
-            width: 190px; height: 190px;
+            width: 280px; height: 280px;
             background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="190" height="190"><rect x="2" y="2" width="186" height="186" fill="%23fffef8" stroke="%23e85a5a" stroke-width="3" rx="4"/><line x1="95" y1="2" x2="95" y2="188" stroke="%23e85a5a" stroke-width="1.5" stroke-dasharray="6,4"/><line x1="2" y1="95" x2="188" y2="95" stroke="%23e85a5a" stroke-width="1.5" stroke-dasharray="6,4"/></svg>');
-            margin-bottom: 18px; cursor: crosshair;
+            margin-bottom: 18px; cursor: crosshair; background-size: 100% 100%;
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.08);
             transition: transform 0.3s, box-shadow 0.3s;
@@ -414,6 +414,8 @@
         }
         /* 弹窗隐藏时暂停田字格脉冲动画，避免常驻重绘（性能优化） */
         .modal-overlay:not(.active) #tzg-container { animation-play-state: paused; }
+
+
 
         /* 释义区域 */
         .meaning-box {
@@ -766,26 +768,29 @@
             box-shadow: 0 2px 10px rgba(255,107,107,0.4);
         }
 
-        /* ==================== 背面：田字格与笔画名称左右对齐 ==================== */
+        /* ==================== 背面：笔画名称在田字格左侧（紧贴中线、最窄宽） ==================== */
         .write-row {
-            display: flex; gap: 20px; align-items: flex-start;
-            width: 100%; justify-content: center;
+            display: flex; flex-direction: row; align-items: center; justify-content: center;
+            gap: 10px; width: 100%; max-width: 100%; box-sizing: border-box; flex: 1;
         }
         .strokes-side {
-            flex: 1; max-width: 160px;
-            display: flex; flex-direction: column; gap: 8px;
+            width: auto; min-width: 0; max-width: 132px;
+            flex: 0 1 auto; align-self: center;
+            display: flex; flex-direction: column; gap: 6px;
+            text-align: right;                          /* 紧贴中线：文字右对齐，靠向田字格 */
             background: linear-gradient(135deg, #ede7f6 0%, #d1c4e9 100%);
             border: 2px solid #b39ddb; border-radius: 16px;
-            padding: 12px 14px; box-shadow: 0 3px 10px rgba(103,58,183,0.15);
-            height: 190px; overflow-y: auto;       /* 与田字格等高，超出可滚动 */
-            scrollbar-width: thin;
+            padding: 10px 12px; box-shadow: 0 3px 10px rgba(103,58,183,0.15);
+            max-height: 280px; overflow-y: auto;        /* 高度与田字格齐平，超出则内部滚动，绝不溢出弹窗 */
+            box-sizing: border-box; scrollbar-width: thin;
         }
-        .strokes-side .strokes-label { font-size: 0.95em; color: #4527a0; font-weight: bold; text-align: center; margin-bottom: 4px; }
-        .strokes-side .stroke-list { display: flex; flex-direction: column; gap: 6px; }
+        .strokes-side .strokes-label { font-size: 0.95em; color: #4527a0; font-weight: bold; text-align: right; margin-bottom: 4px; }
+        .strokes-side .stroke-list { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 5px; align-items: stretch; }
         .strokes-side .stroke-chip {
             background: #fff; border: 2px solid #b39ddb; border-radius: 10px;
             padding: 4px 8px; font-size: 0.9em; color: #4527a0; font-weight: bold;
-            display: flex; align-items: center; gap: 5px; width: 100%; justify-content: flex-start;
+            display: flex; align-items: center; gap: 5px; width: 100%; justify-content: flex-end;
+            text-align: right; box-sizing: border-box;
         }
         .strokes-side .stroke-name { flex: 1; white-space: nowrap; }
         /* 笔画类型徽标（基本笔画 / 折画） */
@@ -914,12 +919,53 @@
             .quiz-option:hover, .quiz-close:hover, .tgp-btn:hover, #tzg-container:hover { transform: none !important; }
         }
 
+        /* ==================== 语音设置面板（免费内置语音包） ==================== */
+        .voice-tab { margin-left: auto; background: rgba(255,255,255,0.18); backdrop-filter: blur(4px); }
+        .voice-tab:hover { background: rgba(255,215,0,0.35); }
+        .rate-tab { background: rgba(255,255,255,0.18); backdrop-filter: blur(4px); font-variant-numeric: tabular-nums; }
+        .rate-tab:hover { background: rgba(120,200,255,0.35); }
+        .voice-panel {
+            position: fixed; top: 58px; right: 14px; z-index: 300;
+            display: none; width: 260px; max-width: 86vw; max-height: 52vh; overflow-y: auto;
+            background: #fffdf7; border: 2px solid #ffb74d; border-radius: 16px;
+            box-shadow: 0 12px 34px rgba(0,0,0,0.28); padding: 10px;
+            scrollbar-width: thin;
+        }
+        .voice-panel h4 { margin: 2px 6px 8px; font-size: 0.92em; color: #bf360c; }
+        .voice-panel .vp-tip { padding: 6px 8px; font-size: 0.8em; color: #888; line-height: 1.5; }
+        .voice-opt {
+            display: block; width: 100%; text-align: left; border: 2px solid #ffd9a0;
+            background: #fff6e8; border-radius: 12px; padding: 8px 10px; margin: 5px 0;
+            font-size: 0.84em; color: #5a3a1a; cursor: pointer; line-height: 1.3;
+        }
+        .voice-opt small { color: #b08a5a; font-size: 0.85em; }
+        .voice-opt:hover { border-color: #ff9f43; }
+        .voice-opt.active { background: linear-gradient(135deg, #ffd54f 0%, #ff9f43 100%); color: #fff; border-color: #ff9f43; }
+        .voice-opt.active small { color: rgba(255,255,255,0.85); }
+
+        /* ==================== 语速选择面板（下拉式，多预设可选） ==================== */
+        .rate-panel {
+            position: fixed; top: 58px; right: 14px; z-index: 300;
+            display: none; width: 200px; max-width: 86vw;
+            background: #fffdf7; border: 2px solid #7fc4ff; border-radius: 16px;
+            box-shadow: 0 12px 34px rgba(0,0,0,0.28); padding: 10px;
+            scrollbar-width: thin;
+        }
+        .rate-panel h4 { margin: 2px 6px 8px; font-size: 0.92em; color: #0277bd; text-align: center; }
+        .rate-opt {
+            display: block; width: 100%; text-align: center; border: 2px solid #b3e5fc;
+            background: #f0f9ff; border-radius: 12px; padding: 9px 10px; margin: 5px 0;
+            font-size: 0.95em; color: #01579b; cursor: pointer; line-height: 1.3; font-weight: bold;
+        }
+        .rate-opt:hover { border-color: #29b6f6; }
+        .rate-opt.active { background: linear-gradient(135deg, #4fc3f7 0%, #0288d1 100%); color: #fff; border-color: #0288d1; }
+
         /* ==================== 响应式适配 ==================== */
         @media (max-width: 1024px) {
             .modal-content { width: 92vw; height: 82vh; }
             .flip-face { padding: 64px 22px 56px; }
             .core-display { font-size: 4.6em; }
-            .strokes-side { max-width: 150px; }
+            .strokes-side { max-width: 128px; max-height: 280px; }
         }
         @media (max-width: 900px) {
             .app-container { aspect-ratio: auto; width: 94vw; height: 86dvh; max-width: none; max-height: none; }
@@ -929,13 +975,13 @@
             .flip-face { padding: 60px 16px 48px; }
             .left-char-display { font-size: 2.6em; }
             .pinyin { font-size: 1.8em; }
-            #tzg-container { width: 150px; height: 150px; }
+            #tzg-container { width: 240px; height: 240px; }
             .core-display { font-size: 3.6em; }
             .structure-strip { flex-wrap: wrap; }
-            .write-row { flex-direction: column; align-items: center; }
-            .strokes-side { max-width: none; width: 100%; height: auto; }
-            .strokes-side .stroke-list { flex-direction: row; flex-wrap: wrap; justify-content: center; }
-            .strokes-side .stroke-chip { width: auto; }
+            .write-row { flex-direction: row; align-items: center; gap: 10px; }
+            .strokes-side { max-width: 120px; width: auto; max-height: 240px; height: auto; }
+            .strokes-side .stroke-list { flex-direction: column; flex-wrap: nowrap; }
+            .strokes-side .stroke-chip { width: 100%; }
             /* 移动端左侧图变矮，面板收窄高度（≤46%）并贴底，确保顶部大字不被遮挡，内容仍可滚动 */
             .read-popup { max-height: 46%; left: 12px; right: 12px; bottom: 6px; }
             .read-popup-body { padding: 0 2px; }
@@ -946,6 +992,8 @@
             .rp-text { font-size: 1.05em; }
             .core-display { font-size: 3.2em; }
             .read-popup-head { font-size: 1.1em; padding: 10px 14px; }
+            #tzg-container { width: 200px; height: 200px; }
+            .strokes-side { max-width: 104px; max-height: 200px; }
         }
 
         /* 竖屏设备（手机/平板竖持）：以高度驱动，让寻宝地图铺满可视区，卡片更大更易点按 */
@@ -1014,6 +1062,10 @@
         <div class="scene-tabs" id="sceneTabs">
             <button class="scene-tab active" data-scene="nature" onclick="switchScene('nature')">🌿 自然探索</button>
             <button class="scene-tab" data-scene="zoo" onclick="switchScene('zoo')">🦁 动物王国</button>
+            <button class="scene-tab voice-tab" id="btnVoice" onclick="toggleVoicePanel()">🔊 语音</button>
+            <div class="voice-panel" id="voicePanel"></div>
+            <button class="scene-tab rate-tab" id="btnRate" onclick="toggleRatePanel()" title="选择语速（默认 1 倍）">⏩ 1×</button>
+            <div class="rate-panel" id="ratePanel"></div>
         </div>
 
         <!-- 标题 -->
@@ -1026,7 +1078,7 @@
         <svg class="corner-deco br" viewBox="0 0 70 70"><path d="M5,5 L5,55 Q5,65 15,65 L65,65" fill="none" stroke="#ffd54f" stroke-width="3" stroke-linecap="round"/><circle cx="5" cy="5" r="5" fill="#ffd54f"/></svg>
 
         <!-- 背景图 -->
-        <img src="背景1.png" class="main-bg" alt="自然元素探索地图">
+        <img src="背景1.jpg" class="main-bg" alt="自然元素探索地图" decoding="async">
 
         <!-- 5×3 热区交互网格 -->
         <div class="grid-overlay" id="gridOverlay"></div>
@@ -1126,9 +1178,9 @@
                             <button id="btn-trace" class="tb-btn tb-trace">✍️ 描红练习</button>
                         </div>
 
-                        <!-- 田字格 + 左侧笔画名称（左右对齐，课本式） -->
+                        <!-- 田字格 + 笔画名称（课本式） -->
                         <div class="write-row">
-                            <!-- 笔画名称：置于田字格左侧，与田字格对齐 -->
+                            <!-- 笔画名称：置于田字格左侧，紧贴中线、最窄宽 -->
                             <div class="strokes-side" id="ui-strokes">
                                 <div class="strokes-label">🖌️ 笔画名称（共 <span class="stroke-num-total">?</span> 笔）</div>
                                 <div class="stroke-list"></div>
@@ -1141,8 +1193,6 @@
                             </div>
                         </div>
 
-                        <div class="trace-tip">先点「描红讲解」看写法，再点「描红练习」用蓝笔描红；写完后蓝色笔迹会一直保留，直到点其它按钮～</div>
-
                         <!-- 描写练习 · 鼓励引导弹窗（点击「描红练习」后弹出，含鼓励性语言） -->
                         <div class="trace-guide-pop" id="traceGuidePop">
                             <div class="tgp-card">
@@ -1151,6 +1201,9 @@
                                 <button class="tgp-btn" id="tgpStart">开始练习 ✍️</button>
                             </div>
                         </div>
+
+                        <!-- 操作步骤说明：移至背面最下方 -->
+                        <div class="trace-tip">先点「描红讲解」看写法，再点「描红练习」用蓝笔描红；写完后蓝色笔迹会一直保留，直到点其它按钮～</div>
                     </div>
                 </div>
             </div>
@@ -1240,7 +1293,53 @@
     let traceCompleted = false;  // 用户是否已写完（写完则保留蓝迹，不再重置）
     let traceQuizActive = false; // 描红测验是否进行中
     let lastMistakeSpeak = 0;    // 描红写错语音提示节流时间戳（避免连续误触反复播报）
-    const TRACE_WIDTH = 4;       // 黑 / 蓝笔划统一粗细（保证两者完全一致）
+    const TRACE_WIDTH = 4;            // 黑色参考字（范字）笔划粗细
+    const TRACE_DRAW_WIDTH = 28;      // 蓝色手写描红笔迹粗细（现有值2倍，手动书写轨迹更明显、更易辨认）
+    let tzgCenterTries = 0;           // 田字格居中重试计数（字形数据异步加载，最多重试若干次）
+    // 田字格字形居中：HanziWriter 默认按“字身框(em box)”居中，而 makemeahanzi 字库中部分汉字
+    // 的墨迹框相对 em 框偏移（如“日”偏左上），导致字形落在田字格左上角。此处通过给两个田字格
+    // SVG 设置 viewBox 把字形平移到正中。关键：必须改 SVG 的 viewBox（而非内层 <g> 的 transform）——
+    // 因为 HanziWriter 用 svg.getScreenCTM() 做描红指针→字形坐标映射，改 viewBox 会被 getScreenCTM
+    // 包含，从而保证“蓝色手写轨迹”与“黑色参考字”始终对齐、不错位。
+    function applyTzgCentering(isFollowup) {
+        if (typeof HanziWriter === 'undefined') return;           // 字库未加载则无需重试
+        const base = document.getElementById('tzg-base');
+        const trace = document.getElementById('tzg-trace');
+        const svg = base && base.querySelector('svg');
+        if (!svg) { if (tzgCenterTries++ < 50) setTimeout(() => applyTzgCentering(false), 120); return; }
+        const g = svg.querySelector('g');                          // 含字形（轮廓+字+高亮）的定位组
+        if (!g) { if (tzgCenterTries++ < 50) setTimeout(() => applyTzgCentering(false), 120); return; }
+        const paths = Array.from(svg.querySelectorAll('path')).filter(p => !p.closest('defs'));
+        if (paths.length === 0) { if (tzgCenterTries++ < 50) setTimeout(() => applyTzgCentering(false), 120); return; }  // 字形数据尚未异步加载完
+        tzgCenterTries = 0;
+        const size = parseFloat(svg.getAttribute('width')) || 190; // 桌面 190 / 移动 160（与 HanziWriter 创建尺寸一致）
+        // 暂移除 viewBox（若有）以测量“未校正”字形位置，保证幂等可重复调用
+        svg.removeAttribute('viewBox');
+        const traceSvg = trace && trace.querySelector('svg');
+        if (traceSvg) traceSvg.removeAttribute('viewBox');
+        // 字形中心（SVG 用户坐标系）：用 getBBox + 组变换矩阵求得。该值仅取决于字形几何与
+        // HanziWriter 的组变换，与 CSS 布局 / 翻面 3D 动画无关，故测量稳定、不会因动画而失真。
+        // （注意：不能用 getBoundingClientRect 反推——那量的是“无 viewBox 渲染模式”下的屏幕位置，
+        //  与设置 viewBox 后的映射不一致，会导致偏移计算错误。）
+        const bb = g.getBBox();
+        const bx = bb.x + bb.width / 2, by = bb.y + bb.height / 2;
+        const tv = g.transform.baseVal;
+        const m = tv && tv.numberOfItems ? tv.consolidate().matrix : null;
+        let gx, gy;
+        if (m) { const tp = new DOMPoint(bx, by).matrixTransform(m); gx = tp.x; gy = tp.y; }
+        else { // 兜底：屏幕包围盒（仍受布局影响，仅作保险）
+          const sr = svg.getBoundingClientRect(), gr = g.getBoundingClientRect();
+          const k = size / sr.width;
+          gx = (gr.left + gr.width / 2 - sr.left) * k; gy = (gr.top + gr.height / 2 - sr.top) * k;
+        }
+        const vx = (gx - size / 2).toFixed(2);
+        const vy = (gy - size / 2).toFixed(2);
+        const vb = vx + ' ' + vy + ' ' + size + ' ' + size;
+        svg.setAttribute('viewBox', vb);
+        if (traceSvg) traceSvg.setAttribute('viewBox', vb);       // 同步，保持两层对齐（描红手写与参考字对齐）
+        // 翻面 3D 动画期间首次调用若因时序异常，600ms 后动画结束再重测校正一次（仅调度一次，避免死循环）
+        if (!isFollowup) setTimeout(() => applyTzgCentering(true), 600);
+    }
     let threeScene = null;
     let currentCard = null;   // 当前打开的知识卡片数据
     let blendType = null;     // 拼读浮窗类型：null / 'pinyin' / 'english'（用于喇叭显隐切换）
@@ -1249,7 +1348,7 @@
     // ==================== 场景管理 ====================
     let currentScene = 'nature';  // 当前场景：'nature'（自然元素）| 'zoo'（动物王国）
     const SCENE_CONFIG = {
-        nature: { data: literacyData, bgSrc: '背景1.png', title: '🌿 自然元素探索之旅', cols: 5, speakPrefix: '自然元素' },
+        nature: { data: literacyData, bgSrc: '背景1.jpg', title: '🌿 自然元素探索之旅', cols: 5, speakPrefix: '自然元素' },
         zoo:    { data: zooData,     bgSrc: '背景图2.jpg', title: '🦁 动物王国探索之旅', cols: 6, speakPrefix: '动物朋友' }
     };
 
@@ -1263,6 +1362,10 @@
         }
         try {
             buildGrid();   // 默认使用 currentScene（='nature'）
+            try { loadVoicePref(); } catch(e){}
+            try { loadRatePref(); } catch(e){}
+            try { populateVoicePanel(); } catch(e){}
+            try { syncRateBtn(); } catch(e){}
             initTopDrag();
         } catch (e) {
             console.error('主场景初始化出错：', e);
@@ -1310,10 +1413,12 @@
     function initThreeBackground() {
         if (threeScene) return;                        // 避免重复初始化（async 加载可能触发多次）
         if (typeof THREE === 'undefined') return;      // CDN 未就绪时直接跳过，回退纯色背景
+        // 触屏/移动设备降低渲染负担，避免 iPad 等常驻重绘卡顿
+        const isTouch = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
         const canvas = document.getElementById('three-canvas');
         const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 2));
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -1324,7 +1429,7 @@
         // ---- 创建多种粒子系统 ----
 
         // 1. 金色萤火虫/星光粒子（主粒子）
-        const fireflyCount = 120;
+        const fireflyCount = isTouch ? 60 : 120;
         const fireflyGeom = new THREE.BufferGeometry();
         const fireflyPos = new Float32Array(fireflyCount * 3);
         const fireflySizes = new Float32Array(fireflyCount);
@@ -1378,7 +1483,7 @@
         scene.add(fireflies);
 
         // 2. 彩色梦幻尘埃粒子
-        const dustCount = 80;
+        const dustCount = isTouch ? 40 : 80;
         const dustGeom = new THREE.BufferGeometry();
         const dustPos = new Float32Array(dustCount * 3);
         const dustColors = new Float32Array(dustCount * 3);
@@ -1432,10 +1537,10 @@
         const dustParticles = new THREE.Points(dustGeom, dustMat);
         scene.add(dustParticles);
 
-        // ---- 动画循环 ----
-        let time = 0;
-        function animate() {
-            requestAnimationFrame(animate);
+        // ---- 动画循环（可暂停：页面隐藏 / 弹窗打开时停止，移动端显著省电防卡顿） ----
+        let threeRAF = null, threeActive = false, time = 0;
+        function frame() {
+            threeRAF = requestAnimationFrame(frame);
             time += 0.016;
             fireflyMat.uniforms.uTime.value = time;
             dustMat.uniforms.uTime.value = time;
@@ -1445,7 +1550,15 @@
             camera.lookAt(0, 0, 0);
             renderer.render(scene, camera);
         }
-        animate();
+        function startThree() { if (threeActive) return; threeActive = true; frame(); }
+        function stopThree()  { threeActive = false; if (threeRAF) { cancelAnimationFrame(threeRAF); threeRAF = null; } }
+        // 暴露控制句柄给弹窗开关
+        window.__threeCtl = { start: startThree, stop: stopThree, isActive: () => threeActive };
+        // 切到后台（切换 App / 锁屏）时暂停，回到前台恢复——避免常驻重绘拖慢设备
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) stopThree(); else startThree();
+        });
+        startThree();
 
         // ---- 响应窗口大小变化 ----
         window.addEventListener('resize', () => {
@@ -1547,6 +1660,8 @@
     function openModal(data) {
         const modal = document.getElementById('cardModal');
         currentCard = data;
+        // 打开卡片时暂停 3D 背景动画，释放 GPU（移动端防卡顿）
+        if (window.__threeCtl) window.__threeCtl.stop();
 
         // 1. 左侧媒体（图片或视频）：按扩展名自动判断
         //    图片 → background-image 等比覆盖填充；
@@ -1633,7 +1748,7 @@
                 traceQuizActive = false;
                 // 底层：黑色笔顺动画 / 字形参考
                 baseWriter = HanziWriter.create('tzg-base', data.char, {
-                    width: tzgSize, height: tzgSize, padding: 15,
+                    width: tzgSize, height: tzgSize, padding: 10,
                     strokeColor: '#333333',      // 黑色笔划（笔顺动画 / 字形参考）
                     // 独体字整体即部首，参考字保持黑色；合体字仅把部首高亮为红，符合“黑色笔顺动画/字形参考”设计
                     radicalColor: (data.structure && data.structure.indexOf('独体') >= 0) ? '#333333' : '#ff6b6b',
@@ -1644,17 +1759,18 @@
                 });
                 // 上层：蓝色手写描红（完成笔画仍保持蓝色，且永不随动画被清除）
                 traceWriter = HanziWriter.create('tzg-trace', data.char, {
-                    width: tzgSize, height: tzgSize, padding: 15,
+                    width: tzgSize, height: tzgSize, padding: 10,
                     strokeColor: '#1e88e5',      // 完成笔画保持蓝色
                     drawingColor: '#1e88e5',     // 书写中笔迹蓝色
-                    strokeWidth: TRACE_WIDTH,    // 与黑色笔划同宽
-                    drawingWidth: TRACE_WIDTH,   // 与黑色笔划同宽
+                    strokeWidth: TRACE_DRAW_WIDTH,    // 蓝笔明显加粗（手动描红轨迹更清晰）
+                    drawingWidth: TRACE_DRAW_WIDTH,   // 蓝笔明显加粗
                     showOutline: false,          // 不重复画轮廓，仅呈现用户蓝色笔迹
                     showCharacter: false,        // 关键修复：默认不渲染蓝色字，蓝色仅在手动书写(quiz)时出现，不遮挡田字格
                     outlineColor: '#d0d0d0'
                 });
                 // 8. 书写临摹测验及通关联动（自由书写保留蓝色轨迹）
                 enableQuiz(data);
+                applyTzgCentering();   // 等字形数据加载后把字符平移到田字格正中
             }
         } catch (e) {
             console.warn('田字格初始化失败（不影响弹窗显示）：', e);
@@ -1755,6 +1871,8 @@
         const v = lp && lp.querySelector('video.modal-media');
         if (v) { try { v.pause(); } catch(e){} }
         window.speechSynthesis.cancel();
+        // 关闭卡片后恢复 3D 背景（仅当页面仍可见）
+        if (window.__threeCtl && !document.hidden) window.__threeCtl.start();
     }
 
     // ==================== 翻转卡片（正面 <-> 背面） ====================
@@ -1764,7 +1882,7 @@
         const flipped = inner.classList.toggle('flipped');
         btn.textContent = flipped ? '🔄 翻回正面 🏠' : '🔄 翻到背面 ✍️';
         // 翻到背面时收起「读一读」面板（该阅读面板归属正面，避免与背面书写区视觉重叠）
-        if (flipped) closeReadPopup();
+        if (flipped) { closeReadPopup(); }
     }
 
     // 点击遮罩层也可关闭
@@ -1790,13 +1908,13 @@
 
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'zh-CN';
-        utterance.rate = 0.85;                // 语速稍慢，适合幼儿
+        utterance.rate = userRatePref;        // 语速：默认 1 倍（可在语音区「⏩」按钮调节）
         utterance.pitch = 1.2;                // 音调稍高，亲切感
         utterance.volume = 1.0;
 
         // 选择标准中文（普通话）语音，排除港台繁体
         const zhVoice = getVoice('zh-CN');
-        if (zhVoice) utterance.voice = zhVoice;
+        if (zhVoice) { utterance.voice = zhVoice; utterance.lang = zhVoice.lang; }
 
         let fin = false;
         const done = () => { if (fin) return; fin = true; };
@@ -1804,10 +1922,7 @@
         synth.speak(utterance);
     }
 
-    // 确保语音列表已加载
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = () => {};
-    }
+    // 语音列表加载由 ensureVoices() 统一处理（见下方）
 
     // ==================== 拼音拼读（声母+韵母+声调，符合课标） ====================
     const ZHYR = ['zhi','chi','shi','ri','zi','ci','si','yi','wu','yu','ye','yue','yuan','yin','yun','ying'];
@@ -1888,11 +2003,11 @@
         return new Promise((resolve) => {
             const synth = window.speechSynthesis;
             const v = synth.getVoices();
-            if (v && v.length) return resolve(v);
+            if (v && v.length) { populateVoicePanel(); return resolve(v); }
             let done = false;
-            const finish = () => { if (done) return; done = true; resolve(synth.getVoices()); };
-            if (typeof synth.onvoiceschanged !== 'undefined') {
-                synth.onvoiceschanged = finish;
+            const finish = () => { if (done) return; done = true; populateVoicePanel(); resolve(synth.getVoices()); };
+            if ('onvoiceschanged' in synth) {
+                synth.onvoiceschanged = finish;   // 列表就绪后同步刷新语音选择面板
             }
             setTimeout(finish, 1500); // 兜底，避免极端情况下一直挂起
         });
@@ -1901,6 +2016,12 @@
     function getVoice(lang){
         const voices = window.speechSynthesis.getVoices() || [];
         if (!voices.length) return null;
+        // 用户已选择语音（免费内置语音包）：按名称精确匹配，确保「设置语音」与「实际播放」一致（修复 iPad 不一致）
+        if (userVoicePref && lang && lang.toLowerCase().startsWith('zh')) {
+            const pick = voices.find(v => v.name === userVoicePref.name && (v.lang || '') === userVoicePref.lang)
+                      || voices.find(v => v.name === userVoicePref.name);
+            if (pick) return pick;
+        }
         if (lang && lang.toLowerCase().startsWith('en')) {
             return voices.find(v => /^en/i.test(v.lang || '')) || null;
         }
@@ -1913,6 +2034,110 @@
             || voices.find(isZh)
             || null;
     }
+    // ==================== 免费内置语音包（设备 TTS 语音选择，持久化） ====================
+    let userVoicePref = null;
+    function loadVoicePref(){ try { const r = localStorage.getItem('ttsVoice'); if (r) userVoicePref = JSON.parse(r); } catch(e){} }
+    function isZhVoice(v){
+        const L = (v.lang || '').toLowerCase();
+        if (L.includes('tw') || L.includes('hk') || L.includes('hant')) return false;
+        return L.startsWith('zh') || L.includes('cmn') || L.includes('chinese') || L.includes('mandarin');
+    }
+    function populateVoicePanel(){
+        const panel = document.getElementById('voicePanel');
+        if (!panel) return;
+        const voices = (window.speechSynthesis.getVoices() || []).filter(isZhVoice);
+        if (!voices.length) {
+            panel.innerHTML = '<h4>🔊 语音设置</h4><div class="vp-tip">当前设备/浏览器未提供免费中文语音，可在系统设置中开启「语音合成」，或换用 Chrome / Safari 后重试。</div>';
+            return;
+        }
+        let html = '<h4>🔊 选择语音（免费内置）</h4>';
+        voices.forEach((v) => {
+            const active = (userVoicePref && userVoicePref.name === v.name) ? ' active' : '';
+            html += '<button class="voice-opt' + active + '" data-name="' + v.name + '" data-lang="' + v.lang + '">' + v.name + '<br><small>' + v.lang + '</small></button>';
+        });
+        panel.innerHTML = html;
+        panel.querySelectorAll('.voice-opt').forEach((b) => {
+            b.addEventListener('click', () => selectVoice(b.dataset.name, b.dataset.lang));
+        });
+    }
+    function selectVoice(name, lang){
+        userVoicePref = { name: name, lang: lang };
+        try { localStorage.setItem('ttsVoice', JSON.stringify(userVoicePref)); } catch(e){}
+        const panel = document.getElementById('voicePanel');
+        if (panel) panel.querySelectorAll('.voice-opt').forEach((b) => b.classList.toggle('active', b.dataset.name === name));
+        // 立即试播，确认所选语音确实生效（修复 iPad「设置语音」与「实际播放」不一致）
+        speakAudio('你好');
+    }
+    function toggleVoicePanel(){
+        const panel = document.getElementById('voicePanel');
+        if (!panel) return;
+        const show = panel.style.display !== 'block';
+        panel.style.display = show ? 'block' : 'none';
+        if (show) populateVoicePanel();
+    }
+    // 点击面板外部自动收起
+    document.addEventListener('click', (e) => {
+        const panel = document.getElementById('voicePanel');
+        if (panel && panel.style.display === 'block' && !panel.contains(e.target) && e.target.id !== 'btnVoice') {
+            panel.style.display = 'none';
+        }
+    });
+    // 点击语速面板外部自动收起
+    document.addEventListener('click', (e) => {
+        const panel = document.getElementById('ratePanel');
+        if (panel && panel.style.display === 'block' && !panel.contains(e.target) && e.target.id !== 'btnRate') {
+            panel.style.display = 'none';
+        }
+    });
+    // iPad/Safari 首次需用用户手势「唤醒」语音引擎，否则首句可能无声或回退默认音
+    let _ttsWarmed = false;
+    function warmTTS(){
+        if (_ttsWarmed) return; _ttsWarmed = true;
+        try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; window.speechSynthesis.speak(u); } catch(e){}
+    }
+    document.addEventListener('pointerdown', warmTTS, { once: true });
+
+    // ==================== 语速控制（默认 1 倍，用户可调节并持久化） ====================
+    let userRatePref = 1.0;
+    const RATE_STEPS = [0.5, 0.75, 1.0, 1.25, 1.5];
+    function loadRatePref(){
+        try { const r = parseFloat(localStorage.getItem('ttsRate')); if (!isNaN(r) && r > 0) userRatePref = r; } catch(e){}
+    }
+    function syncRateBtn(){
+        const b = document.getElementById('btnRate');
+        if (b) b.textContent = '⏩ ' + userRatePref + '×';
+    }
+    // 语速下拉面板：从多个预设选项中选择（默认 1 倍）
+    function populateRatePanel(){
+        const panel = document.getElementById('ratePanel');
+        if (!panel) return;
+        let html = '<h4>⏩ 选择语速</h4>';
+        RATE_STEPS.forEach((r) => {
+            const active = (Math.abs(r - userRatePref) < 1e-6) ? ' active' : '';
+            const label = (Math.abs(r - 1.0) < 1e-6) ? '1×（标准）' : (r + '×');
+            html += '<button class="rate-opt' + active + '" data-rate="' + r + '">' + label + '</button>';
+        });
+        panel.innerHTML = html;
+        panel.querySelectorAll('.rate-opt').forEach((b) => {
+            b.addEventListener('click', () => selectRate(parseFloat(b.dataset.rate)));
+        });
+    }
+    function selectRate(r){
+        userRatePref = r;
+        try { localStorage.setItem('ttsRate', String(r)); } catch(e){}
+        syncRateBtn();
+        const panel = document.getElementById('ratePanel');
+        if (panel) { panel.style.display = 'none'; populateRatePanel(); }
+        speakAudio('你好');   // 试播，确认语速生效
+    }
+    function toggleRatePanel(){
+        const panel = document.getElementById('ratePanel');
+        if (!panel) return;
+        const show = panel.style.display !== 'block';
+        panel.style.display = show ? 'block' : 'none';
+        if (show) populateRatePanel();
+    }
+
     // 逐条朗读，朗读第 i 条前回调 onStart(i) 用于高亮。
     // 采用 SPEECH_TOKEN 令牌：调用即占用新令牌并取消旧语音；旧回调因令牌不符而放弃，
     // 避免不同朗读任务相互打断/叠加。watchdog 估值偏宽松，确保 onend 先触发再结束。
@@ -1930,10 +2155,10 @@
                     const text = items[i];
                     const u = new SpeechSynthesisUtterance(text);
                     u.lang = lang || 'zh-CN';
-                    u.rate = isEn ? 0.8 : 0.82;
+                    u.rate = userRatePref;
                     u.pitch = isEn ? 1.0 : 1.15;
                     u.volume = 1.0;
-                    if (v) u.voice = v;
+                    if (v) { u.voice = v; u.lang = v.lang; }
                     let fin = false; const done = () => { if (fin) return; fin = true; res(); };
                     // onEnd：本句朗读结束后再触发（用于“读完再高亮”，保证高亮时机与读音一致）
                     u.onend = () => { if (onEnd) onEnd(i); done(); };
@@ -2191,7 +2416,7 @@
             '雨.mp4':{r:90,g:150,b:215}, '雪.mp4':{r:185,g:210,b:230}, '山.mp4':{r:110,g:165,b:110},
             '石.mp4':{r:155,g:140,b:120}, '水.mp4':{r:80,g:160,b:215}, '火.mp4':{r:240,g:105,b:75},
             '土.mp4':{r:185,g:135,b:90}, '地.mp4':{r:115,g:165,b:95}, '沙.mp4':{r:210,g:180,b:120},             '背景.png':{r:120,g:160,b:200},
-            '背景1.png':{r:120,g:160,b:200},
+            '背景1.jpg':{r:120,g:160,b:200},
             // 动物王国（资源位于项目根目录）视频兜底色：按文件名匹配，保证弹窗主色融合不回落默认橙
             '鼠.mp4':{r:150,g:140,b:130}, '牛.mp4':{r:130,g:100,b:75}, '虎.mp4':{r:230,g:140,b:60},
             '兔.mp4':{r:210,g:190,b:185}, '龙.mp4':{r:210,g:70,b:60},  '蛇.mp4':{r:120,g:170,b:110},
@@ -2462,6 +2687,7 @@
         if (pop) pop.classList.remove('show');
     }
 
+    // ==================== 笔顺透明弹窗（左侧视频区）显隐 ====================
     // ==================== 笔顺动画（逐笔播放 + 同步高亮） ====================
     // 替代原 animateCharacter 整体动画：逐笔演示黑色笔顺，并同步高亮左侧对应笔画名称。
     async function playStrokeAnim(data){
@@ -2547,13 +2773,14 @@
         const tzgSize = (window.innerWidth <= 600) ? 160 : 190;
         try {
             traceWriter = HanziWriter.create('tzg-trace', data.char, {
-                width: tzgSize, height: tzgSize, padding: 15,
+                width: tzgSize, height: tzgSize, padding: 10,
                 strokeColor: '#1e88e5', drawingColor: '#1e88e5',
-                strokeWidth: TRACE_WIDTH, drawingWidth: TRACE_WIDTH,
+                strokeWidth: TRACE_DRAW_WIDTH, drawingWidth: TRACE_DRAW_WIDTH,
                 showOutline: false, showCharacter: false, outlineColor: '#d0d0d0'
             });
         } catch(e){}
         traceCompleted = false; traceQuizActive = false;
+        applyTzgCentering();   // 重建蓝色描红层后同步 viewBox，确保与参考字对齐居中
     }
     // 描红讲解（仅语音 + 逐笔演示，不开自由书写；可反复点击）
     async function traceGuide(data){
