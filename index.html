@@ -46,6 +46,12 @@
             0%, 100% { transform: translateY(0) rotateX(0deg); }
             50% { transform: translateY(-8px) rotateX(1deg); }
         }
+        /* 触屏设备（手机/平板）关闭常驻动画，避免持续重绘导致卡顿/无响应 */
+        @media (hover: none) {
+            .app-container { animation: none; }
+            .modal-left::before { animation: none; display: none; }
+            .left-char-display { animation: none; }
+        }
 
         .main-bg {
             width: 100%; height: 100%;
@@ -60,9 +66,7 @@
             display: flex; gap: 6px;
             padding: 4px;
             border-radius: 20px;
-            background: rgba(0, 0, 0, 0.45);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            background: rgba(0, 0, 0, 0.6);
         }
         .scene-tab {
             padding: 8px 22px;
@@ -102,7 +106,7 @@
         .grid-item {
             cursor: pointer;
             border-radius: 16px;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: box-shadow 0.3s ease, background-color 0.3s ease;
             background: rgba(255, 255, 255, 0);
             position: relative;
             transform-style: preserve-3d;
@@ -182,8 +186,7 @@
         .modal-overlay {
             position: fixed; top: 0; left: 0;
             width: 100vw; height: 100vh; height: 100dvh;
-            background: rgba(0,0,0,0.75);
-            backdrop-filter: blur(12px);
+            background: rgba(0,0,0,0.9);
             display: flex; justify-content: center; align-items: center;
             opacity: 0; pointer-events: none;
             transition: opacity 0.45s ease;
@@ -206,7 +209,7 @@
             display: flex; overflow: hidden;
             transform: rotateY(-90deg) scale(0.5);
             opacity: 0;
-            transition: all 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: transform 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             box-shadow:
                 0 30px 90px rgba(0,0,0,0.5),
                 0 0 0 4px rgba(255,200,100,0.3),
@@ -1418,7 +1421,7 @@
         const canvas = document.getElementById('three-canvas');
         const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 2));
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isTouch ? 1 : 2));
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -1429,7 +1432,7 @@
         // ---- 创建多种粒子系统 ----
 
         // 1. 金色萤火虫/星光粒子（主粒子）
-        const fireflyCount = isTouch ? 60 : 120;
+        const fireflyCount = isTouch ? 40 : 120;
         const fireflyGeom = new THREE.BufferGeometry();
         const fireflyPos = new Float32Array(fireflyCount * 3);
         const fireflySizes = new Float32Array(fireflyCount);
@@ -1483,7 +1486,7 @@
         scene.add(fireflies);
 
         // 2. 彩色梦幻尘埃粒子
-        const dustCount = isTouch ? 40 : 80;
+        const dustCount = isTouch ? 25 : 80;
         const dustGeom = new THREE.BufferGeometry();
         const dustPos = new Float32Array(dustCount * 3);
         const dustColors = new Float32Array(dustCount * 3);
@@ -1560,11 +1563,15 @@
         });
         startThree();
 
-        // ---- 响应窗口大小变化 ----
+        // ---- 响应窗口大小变化（防抖：避免 orientationchange/连续 resize 时反复重建 WebGL 缓冲） ----
+        let threeResizeT = null;
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (threeResizeT) clearTimeout(threeResizeT);
+            threeResizeT = setTimeout(() => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }, 200);
         });
     }
 
@@ -1594,18 +1601,25 @@
                 setTimeout(() => openModal(item), 200);
             });
 
-            // 3D 倾斜跟随鼠标
+            // 3D 倾斜跟随鼠标（用 rAF 节流，避免每次 mousemove 触发重排/重绘）
+            let tiltScheduled = false, tiltX = 0, tiltY = 0;
+            div.addEventListener('mouseenter', () => { div.style.willChange = 'transform'; });
             div.addEventListener('mousemove', (e) => {
                 const rect = div.getBoundingClientRect();
-                const x = e.clientX - rect.left - rect.width / 2;
-                const y = e.clientY - rect.top - rect.height / 2;
-                const tiltX = (y / rect.height) * -12;
-                const tiltY = (x / rect.width) * 12;
-                div.style.transform = `scale(1.08) translateZ(20px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
+                tiltX = ((e.clientY - rect.top - rect.height / 2) / rect.height) * -12;
+                tiltY = ((e.clientX - rect.left - rect.width / 2) / rect.width) * 12;
+                if (!tiltScheduled) {
+                    tiltScheduled = true;
+                    requestAnimationFrame(() => {
+                        tiltScheduled = false;
+                        div.style.transform = `scale(1.08) translateZ(20px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
+                    });
+                }
             });
 
             div.addEventListener('mouseleave', () => {
                 div.style.transform = '';
+                div.style.willChange = 'auto';
             });
 
             gridOverlay.appendChild(div);
